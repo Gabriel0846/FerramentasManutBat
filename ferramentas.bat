@@ -321,6 +321,7 @@ if errorlevel 1 (
 )
 echo aperte CRTL + C para parar ping quando desejar.
 ping %ping% -t
+goto inicio
 
 :E
 cls
