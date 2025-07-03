@@ -30,6 +30,7 @@ echo [7] Verificar Disco.
 echo [8] Limpeza De Temporarios.
 echo [9] Configuracao De Rede.
 echo [10] Backup De Arquivos.
+echo [11] Ativar Windows e Office.
 echo [0] Sair.
 set /p opcao= Escolha uma opcao: 
 echo ------------------------------
@@ -44,6 +45,7 @@ if %opcao% equ 7 goto G
 if %opcao% equ 8 goto H
 if %opcao% equ 9 goto I
 if %opcao% equ 10 goto J
+if %opcao% equ 11 goto K
 
 :sair
 exit
@@ -453,3 +455,23 @@ robocopy "%source%" "%destination%" /E /LOG:"%logpath%\backup_log.txt" /TEE /V
 echo Backup concluido. O log pode ser encontrado em %logpath%\backup_log.txt
 pause
 goto inicio
+
+:K
+cls
+color 0E
+echo.
+echo /''''''''''''''''''''''''''''''''''''''''''\
+echo -        ATIVAR WINDOWS E OFFICE          -
+echo \............................................/
+echo.
+echo Este processo requer conexao com a internet.
+echo Por favor, aguarde a execucao do script de ativacao.
+echo.
+
+powershell -Command "irm https://massgrave.dev/get | iex"
+
+echo.
+echo Processo de ativacao concluido ou abortado.
+pause
+goto inicio
+
