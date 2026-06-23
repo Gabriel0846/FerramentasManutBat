@@ -26,8 +26,8 @@ function Show-Menu {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "1. Backup de Drivers (antes de formatar)" -ForegroundColor Yellow
-    Write-Host "2. Restauração de Drivers (após instalar Windows)" -ForegroundColor Yellow
-    Write-Host "3. Verificar se driver de rede está no backup" -ForegroundColor Yellow
+    Write-Host "2. Restauracao de Drivers (apos instalar Windows)" -ForegroundColor Yellow
+    Write-Host "3. Verificar se driver de rede esta no backup" -ForegroundColor Yellow
     Write-Host "0. Sair" -ForegroundColor Red
     Write-Host ""
 }
@@ -41,7 +41,7 @@ function Backup-Drivers {
     $backupPath = $backupPath.Trim('"')
     
     if (-not $backupPath) {
-        Write-Host "Caminho inválido. Operação cancelada." -ForegroundColor Red
+        Write-Host "Caminho invalido. Operacao cancelada." -ForegroundColor Red
         pause
         return
     }
@@ -56,7 +56,7 @@ function Backup-Drivers {
     try {
         dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Host
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "Backup concluído com sucesso em: $backupPath" -ForegroundColor Green
+            Write-Host "Backup concluido com sucesso em: $backupPath" -ForegroundColor Green
         } else {
             Write-Host "Erro durante o backup. Verifique o caminho e tente novamente." -ForegroundColor Red
         }
@@ -68,12 +68,12 @@ function Backup-Drivers {
 
 # Função de Restauração
 function Restore-Drivers {
-    Write-Host "`n--- RESTAURAÇÃO DE DRIVERS ---" -ForegroundColor Cyan
-    $backupPath = Read-Host "Digite o caminho onde está o backup (ex: D:\DriversBackup)"
+    Write-Host "`n--- RESTAURACAO DE DRIVERS ---" -ForegroundColor Cyan
+    $backupPath = Read-Host "Digite o caminho onde esta o backup (ex: D:\DriversBackup)"
     $backupPath = $backupPath.Trim('"')
     
     if (-not (Test-Path $backupPath)) {
-        Write-Host "Pasta de backup não encontrada: $backupPath" -ForegroundColor Red
+        Write-Host "Pasta de backup nao encontrada: $backupPath" -ForegroundColor Red
         pause
         return
     }
@@ -85,10 +85,10 @@ function Restore-Drivers {
             Write-Host "Drivers restaurados com sucesso!" -ForegroundColor Green
             Write-Host "Recomenda-se reiniciar o computador." -ForegroundColor Yellow
         } else {
-            Write-Host "Alguns drivers podem não ter sido instalados. Verifique os logs." -ForegroundColor Red
+            Write-Host "Alguns drivers podem nao ter sido instalados. Verifique os logs." -ForegroundColor Red
         }
     } catch {
-        Write-Host "Falha na restauração: $_" -ForegroundColor Red
+        Write-Host "Falha na restauracao: $_" -ForegroundColor Red
     }
     pause
 }
@@ -100,7 +100,7 @@ function Check-NetworkDriver {
     $backupPath = $backupPath.Trim('"')
     
     if (-not (Test-Path $backupPath)) {
-        Write-Host "Pasta não encontrada." -ForegroundColor Red
+        Write-Host "Pasta nao encontrada." -ForegroundColor Red
         pause
         return
     }
@@ -116,7 +116,7 @@ function Check-NetworkDriver {
         Write-Host "`nTotal: $($netDrivers.Count) driver(s) de rede." -ForegroundColor Green
     } else {
         Write-Host "Nenhum driver de rede encontrado no backup!" -ForegroundColor Red
-        Write-Host "Antes de formatar, certifique-se de que o driver de rede está instalado e faça o backup novamente." -ForegroundColor Yellow
+        Write-Host "Antes de formatar, certifique-se de que o driver de rede esta instalado e faca o backup novamente." -ForegroundColor Yellow
     }
     pause
 }
@@ -124,12 +124,12 @@ function Check-NetworkDriver {
 # --- LOOP PRINCIPAL ---
 do {
     Show-Menu
-    $choice = Read-Host "Escolha uma opção"
+    $choice = Read-Host "Escolha uma opcao"
     switch ($choice) {
         "1" { Backup-Drivers }
         "2" { Restore-Drivers }
         "3" { Check-NetworkDriver }
         "0" { Write-Host "Saindo..."; break }
-        default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+        default { Write-Host "Opcao invalida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 } while ($choice -ne "0")
