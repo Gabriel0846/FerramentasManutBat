@@ -34,7 +34,7 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 function Show-Menu {
     Clear-Host
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "      FERRAMENTA DE DRIVERS v2.0        " -ForegroundColor Green
+    Write-Host "      FERRAMENTA DE DRIVERS v2.1        " -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "1. Backup de Drivers (antes de formatar)" -ForegroundColor Yellow
