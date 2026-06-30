@@ -1,9 +1,8 @@
 @echo off
 :: =========================================================================
-:: LANÇADOR INTEGRADO v2.0
-:: Burlar a ExecutionPolicy do PowerShell para a sessão atual sem dar erros
+:: LANÇADOR INTEGRADO CORRIGIDO v2.1
 :: =========================================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression ([System.IO.File]::ReadAllText('%~f0'))"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content '%~f0' | Select-Object -Skip 7 | Out-String | Invoke-Expression"
 exit /b
 
 <#
