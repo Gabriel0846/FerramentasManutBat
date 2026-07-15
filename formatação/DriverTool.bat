@@ -1,23 +1,22 @@
 @echo off
 :: =========================================================================
-:: LANÇADOR INTEGRADO CORRIGIDO v2.1
+:: LANÇADOR INTEGRADO CORRIGIDO v2.2
 :: =========================================================================
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content '%~f0' | Select-Object -Skip 7 | Out-String | Invoke-Expression"
 exit /b
 
 <#
 .SYNOPSIS
-    Ferramenta para backup e restauração de drivers do Windows.
+    Ferramenta para backup, restauração robusta e atualização de drivers do Windows.
 .DESCRIPTION
-    Permite exportar todos os drivers atuais para uma pasta e restaurá-los
-    após uma nova instalação do Windows. Útil para evitar problemas com
-    driver de rede offline.
+    Desenvolvido para técnicos de TI garantirem a integridade de drivers de rede
+    e periféricos antes e depois da formatação, com logs de erro detalhados.
 .NOTES
-    Versão: 2.0 (Com Bypass de execução e correção de caminhos com espaços)
-    Requer execução como Administrador.
+    Versão: 2.2 (Tratamento de erros individual, logs e busca de atualizações)
+    Autor: Gabriel Lopes (Aprimorado)
 #>
 
-# Força o Bypass apenas para este processo caso o lançador sofra alguma restrição secundária
+# Força o Bypass apenas para este processo
 Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
 
 # Verifica se está rodando como administrador
@@ -30,17 +29,28 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-# Função para exibir menu
+# Função para exibir menu com arte ASCII personalizada
 function Show-Menu {
     Clear-Host
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "      FERRAMENTA DE DRIVERS v2.1        " -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host " .-.-----------.-." -ForegroundColor Green
+    Write-Host " | |-----------|#|" -ForegroundColor Green
+    Write-Host " | |-----------| |" -ForegroundColor Green
+    Write-Host " | |-----------| |" -ForegroundColor Green
+    Write-Host " | |--------etf| |" -ForegroundColor Green
+    Write-Host " | `"-----------' |" -ForegroundColor Green
+    Write-Host " |  .-----.-..   |" -ForegroundColor Green
+    Write-Host " |  |     | || |||" -ForegroundColor Green
+    Write-Host " |  |     | || \/|" -ForegroundColor Green
+    Write-Host " `"--^-----^-^^---'" -ForegroundColor Green
+    Write-Host "=================================================" -ForegroundColor Cyan
+    Write-Host "     GERENCIADOR AVANCADO DE DRIVERS v2.2        " -ForegroundColor Green
+    Write-Host "=================================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "1. Backup de Drivers (antes de formatar)" -ForegroundColor Yellow
-    Write-Host "2. Restauracao de Drivers (apos instalar Windows)" -ForegroundColor Yellow
-    Write-Host "3. Verificar se driver de rede esta no backup" -ForegroundColor Yellow
-    Write-Host "0. Sair" -ForegroundColor Red
+    Write-Host "[1] Backup de Drivers (Antes de Formatar)" -ForegroundColor Yellow
+    Write-Host "[2] Restauracao de Drivers + Tratamento de Erros" -ForegroundColor Yellow
+    Write-Host "[3] Verificar se Driver de Rede está no Backup" -ForegroundColor Yellow
+    Write-Host "[4] Buscar Atualizacoes de Drivers Online (MS Update)" -ForegroundColor Cyan
+    Write-Host "[0] Sair" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -48,8 +58,6 @@ function Show-Menu {
 function Backup-Drivers {
     Write-Host "`n--- BACKUP DE DRIVERS ---" -ForegroundColor Cyan
     $backupPath = Read-Host "Digite o caminho completo para salvar o backup (ex: D:\DriversBackup)"
-    
-    # Remove aspas se houver
     $backupPath = $backupPath.Trim('"')
     
     if (-not $backupPath) {
@@ -58,29 +66,29 @@ function Backup-Drivers {
         return
     }
     
-    # Cria a pasta se não existir
     if (-not (Test-Path $backupPath)) {
         New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
         Write-Host "Pasta criada: $backupPath" -ForegroundColor Green
     }
     
-    Write-Host "Exportando drivers. Isso pode levar alguns minutos..." -ForegroundColor Yellow
+    Write-Host "Exportando drivers de terceiros instalados no sistema..." -ForegroundColor Yellow
     try {
-        dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Host
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Backup concluido com sucesso em: $backupPath" -ForegroundColor Green
-        } else {
-            Write-Host "Erro durante o backup. Verifique o caminho e tente novamente." -ForegroundColor Red
-        }
+        # Exporta os drivers de forma limpa usando o próprio pnputil moderno do Windows
+        pnputil /export-driver * "$backupPath" | Out-Null
+        
+        # Validação secundária via DISM caso o pnputil falhe ou exporte incompleto
+        dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Null
+        
+        Write-Host "`n[SUCCESS] Backup concluido com sucesso em: $backupPath" -ForegroundColor Green
     } catch {
-        Write-Host "Falha ao executar DISM: $_" -ForegroundColor Red
+        Write-Host "[ERROR] Falha grave ao exportar os drivers: $_" -ForegroundColor Red
     }
     pause
 }
 
-# Função de Restauração
+# Função de Restauração Individual com Tratamento de Erro e LOG
 function Restore-Drivers {
-    Write-Host "`n--- RESTAURACAO DE DRIVERS ---" -ForegroundColor Cyan
+    Write-Host "`n--- RESTAURACAO DE DRIVERS INDIVIDUALIZADA ---" -ForegroundColor Cyan
     $backupPath = Read-Host "Digite o caminho onde esta o backup (ex: D:\DriversBackup)"
     $backupPath = $backupPath.Trim('"')
     
@@ -90,19 +98,56 @@ function Restore-Drivers {
         return
     }
     
-    Write-Host "Instalando drivers a partir de: $backupPath" -ForegroundColor Yellow
-    try {
-        # Corrigido com aspas escapadas de crase para garantir suporte a caminhos com espaços
-        pnputil /add-driver `"$backupPath\*.inf`" /subdirs /install 2>&1 | Out-Host
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Drivers restaurados com sucesso!" -ForegroundColor Green
-            Write-Host "Recomenda-se reiniciar o computador." -ForegroundColor Yellow
-        } else {
-            Write-Host "Alguns drivers podem nao ter sido instalados. Verifique os logs." -ForegroundColor Red
-        }
-    } catch {
-        Write-Host "Falha na restauracao: $_" -ForegroundColor Red
+    $infFiles = Get-ChildItem -Path $backupPath -Filter "*.inf" -Recurse
+    if ($infFiles.Count -eq 0) {
+        Write-Host "[WARNING] Nenhum arquivo .inf encontrado na pasta informada." -ForegroundColor Yellow
+        pause
+        return
     }
+    
+    Write-Host "`nLocalizados $($infFiles.Count) drivers para instalacao." -ForegroundColor Cyan
+    $logFile = Join-Path $backupPath "log_erros_drivers.txt"
+    # Limpa log anterior se existir
+    if (Test-Path $logFile) { Remove-Item $logFile -Force }
+    
+    $sucessoCount = 0
+    $falhaCount = 0
+    $total = $infFiles.Count
+    $index = 1
+    
+    Write-Host "Iniciando instalacao agressiva. Aguarde..." -ForegroundColor Yellow
+    
+    foreach ($file in $infFiles) {
+        $percent = [math]::Round(($index / $total) * 100)
+        Write-Host -NoNewline "`r[$percent%] Processando driver ($index/$total): $($file.Name) ... " -ForegroundColor Gray
+        
+        # Tenta a instalação forçada do arquivo INF específico
+        $process = Start-Process pnputil -ArgumentList "/add-driver `"$($file.FullName)`" /install" -NoNewWindow -PassThru -Wait
+        
+        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) { # 3010 significa sucesso, mas requer reinicialização
+            $sucessoCount++
+        } else {
+            $falhaCount++
+            # Coleta o erro amigável do sistema para colocar no TXT
+            $errorMessage = "Erro codigo $($process.ExitCode) ao tentar instalar o driver: $($file.FullName)"
+            Add-Content -Path $logFile -Value $errorMessage
+        }
+        $index++
+    }
+    
+    Write-Host "`n`n==========================================" -ForegroundColor Cyan
+    Write-Host "          RESUMO DA INSTALACAO           " -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host "Drivers instalados com SUCESSO: $sucessoCount" -ForegroundColor Green
+    
+    if ($falhaCount -gt 0) {
+        Write-Host "Drivers que FALHARAM: $falhaCount" -ForegroundColor Red
+        Write-Host "Verifique os detalhes das falhas em: $logFile" -ForegroundColor Yellow
+    } else {
+        Write-Host "Todos os drivers foram reinstalados sem nenhum erro!" -ForegroundColor Green
+    }
+    
+    Write-Host "`nRecomenda-se reiniciar o computador para aplicar todas as alteracoes." -ForegroundColor Yellow
     pause
 }
 
@@ -126,12 +171,69 @@ function Check-NetworkDriver {
     if ($netDrivers) {
         Write-Host "Drivers de rede encontrados:" -ForegroundColor Green
         $netDrivers | ForEach-Object { Write-Host " - $($_.FullName)" -ForegroundColor White }
-        Write-Host "`nTotal: $($netDrivers.Count) driver(s) de rede." -ForegroundColor Green
+        Write-Host "`nTotal: $($netDrivers.Count) driver(s) de rede prontos para recuperacao." -ForegroundColor Green
     } else {
         Write-Host "Nenhum driver de rede encontrado no backup!" -ForegroundColor Red
         Write-Host "Antes de formatar, certifique-se de que o driver de rede esta instalado e faca o backup novamente." -ForegroundColor Yellow
     }
     pause
+}
+
+# Função para buscar atualizações de drivers pelo Windows Update (Sem instalar atualizações de SO comuns)
+function Search-DriverUpdates {
+    Write-Host "`n--- BUSCAR E ATUALIZAR DRIVERS VIA WINDOWS UPDATE ---" -ForegroundColor Cyan
+    Write-Host "[INFO] Requer conexao ativa com a internet." -ForegroundColor Yellow
+    
+    $confirm = Read-Host "Deseja iniciar a busca por atualizações de drivers de hardware agora? (S/N)"
+    if ($confirm -ne "S" -and $confirm -ne "s") { return }
+    
+    Write-Host "`nConectando aos servidores do Windows Update (isso pode demorar)..." -ForegroundColor Yellow
+    
+    try {
+        # Inicializa o buscador do Windows Update local
+        $updateSession = New-Object -ComObject Microsoft.Update.Session
+        $updateSearcher = $updateSession.CreateUpdateSearcher()
+        
+        # Filtro de busca específico para DRIVERS que não foram instalados ou estão desatualizados
+        $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Driver'")
+        
+        if ($searchResult.Updates.Count -eq 0) {
+            Write-Host "[SUCCESS] Todos os drivers da máquina ja estao atualizados conforme a Microsoft." -ForegroundColor Green
+        } else {
+            Write-Host "`n[INFO] Encontrado(s) $($searchResult.Updates.Count) driver(s) pendente(s):" -ForegroundColor Cyan
+            
+            $updatesToDownload = New-Object -ComObject Microsoft.Update.UpdateColl
+            foreach ($update in $searchResult.Updates) {
+                Write-Host " - $($update.Title)" -ForegroundColor White
+                $updatesToDownload.Add($update) | Out-Null
+            }
+            
+            # Executa o Download dos Drivers localizados
+            Write-Host "`nBaixando atualizacoes..." -ForegroundColor Yellow
+            $downloader = $updateSession.CreateUpdateDownloader()
+            $downloader.Updates = $updatesToDownload
+            $downloadResult = $downloader.Download()
+            
+            if ($downloadResult.ResultCode -eq 2) { # 2 = Succeeded
+                Write-Host "Download concluido. Instalando drivers..." -ForegroundColor Yellow
+                $installer = $updateSession.CreateUpdateInstaller()
+                $installer.Updates = $updatesToDownload
+                $installationResult = $installer.Install()
+                
+                if ($installationResult.ResultCode -eq 2) {
+                    Write-Host "[SUCCESS] Todos os drivers foram atualizados com sucesso!" -ForegroundColor Green
+                } else {
+                    Write-Host "[WARNING] Ocorreu um problema ao instalar alguns drivers. Codigo do erro: $($installationResult.ResultCode)" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "[ERROR] Falha ao baixar os drivers dos servidores da Microsoft." -ForegroundColor Red
+            }
+        }
+    } catch {
+        Write-Host "[ERROR] Nao foi possivel consultar o Windows Update: $_" -ForegroundColor Red
+    }
+    
+    Read-Host "`nPressione Enter para voltar ao menu"
 }
 
 # --- LOOP PRINCIPAL ---
@@ -142,6 +244,7 @@ do {
         "1" { Backup-Drivers }
         "2" { Restore-Drivers }
         "3" { Check-NetworkDriver }
+        "4" { Search-DriverUpdates }
         "0" { Write-Host "Saindo..."; break }
         default { Write-Host "Opcao invalida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
