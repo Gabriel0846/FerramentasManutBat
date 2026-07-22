@@ -43,13 +43,13 @@ function Show-Menu {
     Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
-    Write-Host '8888888888888888888888":::::"88888888888888888888888' -ForegroundColor Green
-    Write-Host '88888888888888888888::;gPPRg;::888888888888888888888' -ForegroundColor Green
-    Write-Host '88888888888888888888::dP''   `Yb::88888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888":::::"88888888888888888888888' -ForegroundColor Green
+    Write-Host '888888888888888888888:;gPPPRRg;:88888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888::dP''  `Yb::88888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888::8)     (8::88888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888;:Yb     dP:;88( )888888888888888' -ForegroundColor Green
     Write-Host '888888888888888888888;:"8ggg8":;888888888888888888888' -ForegroundColor Green
-    Write-Host '88888888888888888888888aa:::aa88888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888a.:::.a88888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888"88888888888888888888888888' -ForegroundColor Green
@@ -60,7 +60,7 @@ function Show-Menu {
     Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
     Write-Host '88888888888888888888888888a88888888888888888888888888' -ForegroundColor Green
     Write-Host '"""""""""""""""""""'' `"""""""""'' `"""""""""""""""""""' -ForegroundColor Green
-    Write-Host '                                   Normand  Veilleux' -ForegroundColor DarkGray
+    Write-Host '                                    Gabriel Lopes ' -ForegroundColor DarkGray
     Write-Host "=====================================================" -ForegroundColor Cyan
     Write-Host "       GERENCIADOR AVANCADO DE DRIVERS v2.3          " -ForegroundColor Green
     Write-Host "=====================================================" -ForegroundColor Cyan
