@@ -32,16 +32,21 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Função para exibir menu com arte ASCII personalizada
 function Show-Menu {
     Clear-Host
-    Write-Host " .-.-----------.-." -ForegroundColor Green
-    Write-Host " | |-----------|#|" -ForegroundColor Green
-    Write-Host " | |-----------| |" -ForegroundColor Green
-    Write-Host " | |-----------| |" -ForegroundColor Green
-    Write-Host " | |--------etf| |" -ForegroundColor Green
-    Write-Host " | `"-----------' |" -ForegroundColor Green
-    Write-Host " |  .-----.-..   |" -ForegroundColor Green
-    Write-Host " |  |     | || |||" -ForegroundColor Green
-    Write-Host " |  |     | || \/|" -ForegroundColor Green
-    Write-Host " `"--^-----^-^^---'" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⠀⣀⣴⣾⡇⢰⣦⣤⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠀⣾⣿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣄⡀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⢠⣿⣿⣿⡇⠐⠻⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⣸⣶⣶⣤⠄⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣶⣦⣤⣄⣉⠉⠛⠛⠿⢿⣿⡏⢠⣿⣿⣿⡿⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢠⣿⣶⣶⣤⣤⣠⣼⣿⣿⣿⠃⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⡿⠛⠉⠀⠺⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⡁⠀⠀⠀⠀⣹⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⣀⣀⣴⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⢠⣿⡿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⣼⣿⣶⣤⣤⣄⣉⡉⠛⠛⠿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠐⠛⠿⠿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣤⣀⣉⠉⠛⠛⠿⠿⣿⣿⠃⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠉⠉⠛⠛⠿⠿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣾⡏⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠛⠛⠿⠿⣿⠁⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
+    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
     Write-Host "=================================================" -ForegroundColor Cyan
     Write-Host "     GERENCIADOR AVANCADO DE DRIVERS v2.2        " -ForegroundColor Green
     Write-Host "=================================================" -ForegroundColor Cyan
