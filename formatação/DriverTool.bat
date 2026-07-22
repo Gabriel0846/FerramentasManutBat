@@ -32,24 +32,36 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Função para exibir menu com arte ASCII personalizada
 function Show-Menu {
     Clear-Host
-    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⠀⠀⣀⣴⣾⡇⢰⣦⣤⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠀⣾⣿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣄⡀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⢠⣿⣿⣿⡇⠐⠻⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⣸⣶⣶⣤⠄⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣶⣦⣤⣄⣉⠉⠛⠛⠿⢿⣿⡏⢠⣿⣿⣿⡿⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢠⣿⣶⣶⣤⣤⣠⣼⣿⣿⣿⠃⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⡿⠛⠉⠀⠺⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⡁⠀⠀⠀⠀⣹⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⣀⣀⣴⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⢠⣿⡿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⣼⣿⣶⣤⣤⣄⣉⡉⠛⠛⠿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠐⠛⠿⠿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣤⣀⣉⠉⠛⠛⠿⠿⣿⣿⠃⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠉⠉⠛⠛⠿⠿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣾⡏⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠛⠛⠿⠿⣿⠁⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀" -ForegroundColor Green
-    Write-Host "=================================================" -ForegroundColor Cyan
-    Write-Host "     GERENCIADOR AVANCADO DE DRIVERS v2.2        " -ForegroundColor Green
-    Write-Host "=================================================" -ForegroundColor Cyan
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888"""""""""""""""8888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888               8888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888               8888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888               888888888888888888888888888888888`"" -ForegroundColor Green
+    Write-Host "8888aaaaaaaaaaaaaaa888888888888888888888888888888888a" -ForegroundColor Green
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888`":::::`"88888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888::;gPPRg;::888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888::dP'   `Yb::88888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888::8)     (8::88888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888;:Yb     dP:;88( )888888888888888" -ForegroundColor Green
+    Write-Host "888888888888888888888;:`"8ggg8`":;888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888aa:::aa88888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888`"88888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
+    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
+    Write-Host "88888888888888888888888888a88888888888888888888888888" -ForegroundColor Green
+    Write-Host "`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"' `"`"`"`"`"`"`"`"`"' `"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"" -ForegroundColor Green
+    Write-Host "                                   Normand  Veilleux" -ForegroundColor DarkGray
+    Write-Host "=====================================================" -ForegroundColor Cyan
+    Write-Host "       GERENCIADOR AVANCADO DE DRIVERS v2.2          " -ForegroundColor Green
+    Write-Host "=====================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "[1] Backup de Drivers (Antes de Formatar)" -ForegroundColor Yellow
     Write-Host "[2] Restauracao de Drivers + Tratamento de Erros" -ForegroundColor Yellow
@@ -78,10 +90,7 @@ function Backup-Drivers {
     
     Write-Host "Exportando drivers de terceiros instalados no sistema..." -ForegroundColor Yellow
     try {
-        # Exporta os drivers de forma limpa usando o próprio pnputil moderno do Windows
         pnputil /export-driver * "$backupPath" | Out-Null
-        
-        # Validação secundária via DISM caso o pnputil falhe ou exporte incompleto
         dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Null
         
         Write-Host "`n[SUCCESS] Backup concluido com sucesso em: $backupPath" -ForegroundColor Green
@@ -112,7 +121,6 @@ function Restore-Drivers {
     
     Write-Host "`nLocalizados $($infFiles.Count) drivers para instalacao." -ForegroundColor Cyan
     $logFile = Join-Path $backupPath "log_erros_drivers.txt"
-    # Limpa log anterior se existir
     if (Test-Path $logFile) { Remove-Item $logFile -Force }
     
     $sucessoCount = 0
@@ -126,14 +134,12 @@ function Restore-Drivers {
         $percent = [math]::Round(($index / $total) * 100)
         Write-Host -NoNewline "`r[$percent%] Processando driver ($index/$total): $($file.Name) ... " -ForegroundColor Gray
         
-        # Tenta a instalação forçada do arquivo INF específico
         $process = Start-Process pnputil -ArgumentList "/add-driver `"$($file.FullName)`" /install" -NoNewWindow -PassThru -Wait
         
-        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) { # 3010 significa sucesso, mas requer reinicialização
+        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
             $sucessoCount++
         } else {
             $falhaCount++
-            # Coleta o erro amigável do sistema para colocar no TXT
             $errorMessage = "Erro codigo $($process.ExitCode) ao tentar instalar o driver: $($file.FullName)"
             Add-Content -Path $logFile -Value $errorMessage
         }
@@ -184,7 +190,7 @@ function Check-NetworkDriver {
     pause
 }
 
-# Função para buscar atualizações de drivers pelo Windows Update (Sem instalar atualizações de SO comuns)
+# Função para buscar atualizações de drivers pelo Windows Update
 function Search-DriverUpdates {
     Write-Host "`n--- BUSCAR E ATUALIZAR DRIVERS VIA WINDOWS UPDATE ---" -ForegroundColor Cyan
     Write-Host "[INFO] Requer conexao ativa com a internet." -ForegroundColor Yellow
@@ -195,11 +201,8 @@ function Search-DriverUpdates {
     Write-Host "`nConectando aos servidores do Windows Update (isso pode demorar)..." -ForegroundColor Yellow
     
     try {
-        # Inicializa o buscador do Windows Update local
         $updateSession = New-Object -ComObject Microsoft.Update.Session
         $updateSearcher = $updateSession.CreateUpdateSearcher()
-        
-        # Filtro de busca específico para DRIVERS que não foram instalados ou estão desatualizados
         $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Driver'")
         
         if ($searchResult.Updates.Count -eq 0) {
@@ -213,13 +216,12 @@ function Search-DriverUpdates {
                 $updatesToDownload.Add($update) | Out-Null
             }
             
-            # Executa o Download dos Drivers localizados
             Write-Host "`nBaixando atualizacoes..." -ForegroundColor Yellow
             $downloader = $updateSession.CreateUpdateDownloader()
             $downloader.Updates = $updatesToDownload
             $downloadResult = $downloader.Download()
             
-            if ($downloadResult.ResultCode -eq 2) { # 2 = Succeeded
+            if ($downloadResult.ResultCode -eq 2) {
                 Write-Host "Download concluido. Instalando drivers..." -ForegroundColor Yellow
                 $installer = $updateSession.CreateUpdateInstaller()
                 $installer.Updates = $updatesToDownload
