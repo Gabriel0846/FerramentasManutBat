@@ -67,78 +67,82 @@ function Show-Menu {
 # --- FUNÇÕES DO SISTEMA ---
 
 function Get-WindowsKey {
-    Write-Host "`n[INFO] Procurando chave do Windows..." -ForegroundColor Cyan
-    
-    # 1. Tenta buscar da BIOS/UEFI (Chave OEM)
-    $key = (Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey
-    
-    # 2. Se não achar na BIOS, tenta decodificar do Registro do Windows (Chave instalada/Digital)
-    if (-not $key) {
-        Write-Host "[INFO] Chave OEM nao encontrada na BIOS. Buscando no Registro do Windows..." -ForegroundColor Yellow
-        try {
-            $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-            $digitalProductId = (Get-ItemProperty -Path $regPath).DigitalProductId
-            
-            if ($digitalProductId) {
-                # Algoritmo de decodificação da chave de 25 caracteres
-                $isWin8OrUp = ([Environment]::OSVersion.Version.Major -ge 6 -and [Environment]::OSVersion.Version.Minor -ge 2) -or ([Environment]::OSVersion.Version.Major -ge 10)
-                $keyStartIndex = 52
-                $keyEndIndex = $keyStartIndex + 15
-                $digits = @("B","C","D","F","G","H","J","K","M","P","Q","R","T","V","W","X","Y","2","3","4","6","7","8","9")
-                
-                if ($isWin8OrUp) {
-                    $isNewKey = ([math]::Floor($digitalProductId[66] / 6)) -band 1
-                    $digitalProductId[66] = ($digitalProductId[66] -band 247) -bor (($isNewKey -band 2) * 4)
-                }
-                
-                $last = 0
-                $decodedKey = ""
-                for ($i = 24; $i -ge 0; $i--) {
-                    $k = 0
-                    for ($j = 14; $j -ge 0; $j--) {
-                        $k = $k * 256
-                        $k = $digitalProductId[$keyStartIndex + $j] + $k
-                        $digitalProductId[$keyStartIndex + $j] = [math]::Floor($k / 24)
-                        $k = $k % 24
-                    }
-                    $decodedKey = $digits[$k] + $decodedKey
-                    $last = $k
-                }
-                
-                if ($isWin8OrUp -and ($isNewKey -eq 1)) {
-                    $part1 = $decodedKey.SubString(1, $last)
-                    $part2 = $decodedKey.SubString($last + 1, $decodedKey.Length - ($last + 1))
-                    $decodedKey = $part1 + "N" + $part2
-                }
-                
-                # Formata com os hifens (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
-                $key = ""
-                for ($i = 0; $i -le 4; $i++) {
-                    $key += $decodedKey.SubString($i * 5, 5)
-                    if ($i -ne 4) { $key += "-" }
-                }
-            }
-        } catch {
-            Write-Host "[ERROR] Falha ao ler ou decodificar chave do registro." -ForegroundColor Red
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Write-Host "       DIAGNOSTICO DE CHAVE DO WINDOWS    " -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+
+    # Coleta a versão do Windows
+    $osInfo = Get-CimInstance Win32_OperatingSystem
+    Write-Host "Edicao do Windows : $($osInfo.Caption)" -ForegroundColor White
+    Write-Host "Versao / Build    : $($osInfo.Version) (Build $($osInfo.BuildNumber))" -ForegroundColor Gray
+    Write-Host "------------------------------------------" -ForegroundColor Gray
+
+    $keysFound = 0
+
+    # 1. BUSCA CHAVE NA BIOS / UEFI (OEM)
+    try {
+        $biosKey = (Get-CimInstance -Query 'select OA3xOriginalProductKey from SoftwareLicensingService').OA3xOriginalProductKey
+        if ($biosKey -and $biosKey.Trim() -ne "") {
+            $keysFound++
+            Write-Host "`n[CHAVE 1: OEM / BIOS / PLACA-MAE]" -ForegroundColor Green
+            Write-Host " Chave Completa : $biosKey" -ForegroundColor Yellow
+            Write-Host " Tipo de Licenca: OEM (Gravada de fabrica no hardware)" -ForegroundColor White
+            Write-Host " Descricao     : Licenca permanente vinculada a esta placa-mae." -ForegroundColor Gray
         }
+    } catch {}
+
+    # 2. BUSCA CHAVE INSTALADA / REGISTRO / LICENÇA DIGITAL
+    try {
+        $sls = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" | 
+               Where-Object { $_.PartialProductKey -and $_.ApplicationId -eq '55c9273a-2b2c-4032-9916-e0625a639257' } | 
+               Select-Object -First 1
+
+        if ($sls) {
+            $keysFound++
+            $partialKey = $sls.PartialProductKey
+            $licenseStatus = switch ($sls.LicenseStatus) {
+                1 { "Ativado (Licensed)" }
+                2 { "OOB Grace" }
+                3 { "OOT Grace" }
+                4 { "Non-Genuine Grace" }
+                5 { "Not Activated" }
+                6 { "Extended Grace" }
+                default { "Desconhecido ($($sls.LicenseStatus))" }
+            }
+
+            Write-Host "`n[CHAVE 2: LICENCA INSTALADA NO SISTEMA]" -ForegroundColor Green
+            Write-Host " Status Ativacao: $licenseStatus" -ForegroundColor Yellow
+            Write-Host " Ultimos 5 : .....-.....-.....-.....-$partialKey" -ForegroundColor Yellow
+            Write-Host " Descricao     : $($sls.Description)" -ForegroundColor White
+
+            # Classificação do tipo de chave
+            if ($sls.Description -like "*Retail*") {
+                Write-Host " Origem/Tipo   : RETAIL (Chave de Varejo / Adquirida separadamente)" -ForegroundColor Cyan
+            } elseif ($sls.Description -like "*OEM*") {
+                Write-Host " Origem/Tipo   : OEM (Licenca de Fabricante)" -ForegroundColor Cyan
+            } elseif ($sls.Description -like "*VOLUME*" -or $sls.Description -like "*KMS*") {
+                Write-Host " Origem/Tipo   : VOLUME / KMS (Licenca Corporativa/Empresarial)" -ForegroundColor Cyan
+            } elseif ($sls.Description -like "*TIMEBASED*" -or $sls.Description -like "*eval*") {
+                Write-Host " Origem/Tipo   : AVALIACAO (Licenca Temporaria)" -ForegroundColor Red
+            } else {
+                Write-Host " Origem/Tipo   : LICENCA DIGITAL / GENERICA" -ForegroundColor Cyan
+            }
+        }
+    } catch {}
+
+    if ($keysFound -eq 0) {
+        Write-Host "`n[AVISO] Nenhuma chave ou licenca ativa foi encontrada no sistema." -ForegroundColor Yellow
     }
-    
-    # Exibe o resultado final
-    if ($key -and $key -ne "BBBBB-BBBBB-BBBBB-BBBBB-BBBBB") {
-        Write-Host "`n[SUCCESS] Chave do Windows encontrada: $key" -ForegroundColor Green
-    } elseif ($key -eq "BBBBB-BBBBB-BBBBB-BBBBB-BBBBB") {
-        Write-Host "`n[INFO] O sistema usa uma Licenca Digital generica (viculada a conta Microsoft)." -ForegroundColor Cyan
-        Write-Host "Chave generica de instalacao: $key" -ForegroundColor Yellow
-    } else {
-        Write-Host "`n[WARNING] Nao foi possivel recuperar nenhuma chave fisica ou digital no Registro." -ForegroundColor Yellow
-    }
-    Read-Host "`nPressione Enter para continuar"
+
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Read-Host "Pressione Enter para continuar"
 }
 
 function Get-OfficeKey {
-    Write-Host "`n[INFO] Procurando licenças instaladas do Microsoft Office..." -ForegroundColor Cyan
-    
-    # Lista expandida de diretórios comuns do Office (incluindo Office 2016/2019/2021/365/C2R)
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Write-Host "       DIAGNOSTICO DE CHAVE DO OFFICE     " -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+
     $officePaths = @(
         "${env:ProgramFiles}\Microsoft Office\Office16",
         "${env:ProgramFiles(x86)}\Microsoft Office\Office16",
@@ -147,47 +151,62 @@ function Get-OfficeKey {
         "${env:ProgramFiles}\Microsoft Office\root\Office16",
         "${env:ProgramFiles(x86)}\Microsoft Office\root\Office16"
     )
-    
+
     $officeFound = $false
-    
+
     foreach ($path in $officePaths) {
         $osppScript = Join-Path $path "OSPP.VBS"
         if (Test-Path $osppScript) {
             $officeFound = $true
-            Write-Host "`n[INFO] Script de Licenciamento encontrado em: $path" -ForegroundColor Cyan
-            Write-Host "[INFO] Consultando status de ativacao do Office..." -ForegroundColor Cyan
+            Write-Host "[INFO] Script de Licenciamento localizado em:" -ForegroundColor Gray
+            Write-Host "       $path" -ForegroundColor Gray
+            Write-Host "`nConsultando status de ativacao..." -ForegroundColor Yellow
+
+            $output = cscript //nologo "$osppScript" /dstatus 2>&1 | Out-String
             
-            # Executa o script oficial do Office
-            $output = & cscript //nologo "$osppScript" /dstatus 2>&1
-            
-            # Filtra informações cruciais
-            $licenseName = $output | Select-String "LICENSE NAME" | ForEach-Object { $_ -replace '.*LICENSE NAME: ', '' }
-            $licenseStatus = $output | Select-String "LICENSE STATUS" | ForEach-Object { $_ -replace '.*LICENSE STATUS: ', '' }
-            $keys = $output | Select-String "Last 5 characters" | ForEach-Object { $_ -replace '.*: ', '' }
-            
-            if ($keys) {
-                Write-Host "`n==========================================" -ForegroundColor Green
-                Write-Host "         DETALHES DA LICENCA DO OFFICE    " -ForegroundColor Green
-                Write-Host "==========================================" -ForegroundColor Green
-                for ($i = 0; $i -lt $keys.Count; $i++) {
-                    Write-Host "   Produto: $($licenseName[$i])" -ForegroundColor Yellow
-                    Write-Host "   Status : $($licenseStatus[$i])" -ForegroundColor Yellow
-                    Write-Host "   Chave (Ultimos 5 Digitos): $($keys[$i])" -ForegroundColor Green
-                    Write-Host "   ----------------------------------------" -ForegroundColor Gray
+            # Divide as licenças encontradas por blocos de produto
+            $products = $output -split "LICENSE NAME:" | Where-Object { $_ -match "LICENSE STATUS:" }
+
+            if ($products.Count -gt 0) {
+                $count = 1
+                foreach ($prod in $products) {
+                    # Extrai Name, Status e 5 Dígitos via Regex
+                    $name = if ($prod -match "(.*)") { $matches[1].Trim() } else { "Desconhecido" }
+                    
+                    $status = "Desconhecido"
+                    if ($prod -match "LICENSE STATUS:\s*---(.*)---") { 
+                        $status = $matches[1].Trim() 
+                    } elseif ($prod -match "LICENSE STATUS:\s*(.*)") { 
+                        $status = $matches[1].Trim() 
+                    }
+
+                    $key = if ($prod -match "Last 5 characters of installed product key:\s*(.*)") { $matches[1].Trim() } else { "N/A" }
+
+                    Write-Host "`n------------------------------------------" -ForegroundColor Gray
+                    Write-Host " LICENCA #$count" -ForegroundColor Green
+                    Write-Host " Produto : $name" -ForegroundColor White
+                    Write-Host " Status  : $status" -ForegroundColor Yellow
+                    Write-Host " Chave   : Ultimos 5 digitos: $key" -ForegroundColor Green
+                    
+                    if ($key -eq "N/A") {
+                        Write-Host " Nota    : Licenca associada a Conta/Subscription (sem chave local)." -ForegroundColor Gray
+                    }
+                    $count++
                 }
             } else {
-                Write-Host "`n[WARNING] Office esta instalado, mas nenhuma chave parcial ativa foi listada." -ForegroundColor Yellow
-                Write-Host "Nota: Se for Office 365 associado a conta, chaves locais podem nao existir." -ForegroundColor Yellow
+                Write-Host "`n[AVISO] Office instalado, mas nenhuma licenca valida foi encontrada no OSPP." -ForegroundColor Yellow
             }
             break
         }
     }
-    
+
     if (-not $officeFound) {
-        Write-Host "`n[ERROR] O script do Office (OSPP.VBS) nao foi localizado nos caminhos padroes." -ForegroundColor Red
-        Write-Host "[INFO] Verifique se o Office está instalado corretamente nesta maquina." -ForegroundColor Yellow
+        Write-Host "`n[ERRO] O script OSPP.VBS nao foi localizado." -ForegroundColor Red
+        Write-Host "Verifique se o Microsoft Office esta instalado nesta maquina." -ForegroundColor Yellow
     }
-    Read-Host "`nPressione Enter para continuar"
+
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Read-Host "Pressione Enter para continuar"
 }
 
 function Correcao-Leve {
