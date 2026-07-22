@@ -1,8 +1,9 @@
 @echo off
 :: =========================================================================
-:: LANÇADOR INTEGRADO CORRIGIDO v2.2
+:: LANÇADOR INTEGRADO CORRIGIDO v2.3 (UTF-8 FIX)
 :: =========================================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content '%~f0' | Select-Object -Skip 7 | Out-String | Invoke-Expression"
+chcp 65001 >nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content '%~f0' -Encoding UTF8 | Select-Object -Skip 8 | Out-String | Invoke-Expression"
 exit /b
 
 <#
@@ -12,11 +13,12 @@ exit /b
     Desenvolvido para técnicos de TI garantirem a integridade de drivers de rede
     e periféricos antes e depois da formatação, com logs de erro detalhados.
 .NOTES
-    Versão: 2.2 (Tratamento de erros individual, logs e busca de atualizações)
+    Versão: 2.3 (Fix de codificação de texto / ASCII Art)
     Autor: Gabriel Lopes (Aprimorado)
 #>
 
-# Força o Bypass apenas para este processo
+# Configura a sessão do PowerShell para UTF-8 nativo
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
 
 # Verifica se está rodando como administrador
@@ -29,38 +31,38 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-# Função para exibir menu com arte ASCII personalizada
+# Função para exibir menu com arte ASCII
 function Show-Menu {
     Clear-Host
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888"""""""""""""""8888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888               8888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888               8888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888               888888888888888888888888888888888`"" -ForegroundColor Green
-    Write-Host "8888aaaaaaaaaaaaaaa888888888888888888888888888888888a" -ForegroundColor Green
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888`":::::`"88888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888::;gPPRg;::888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888::dP'   `Yb::88888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888::8)     (8::88888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888;:Yb     dP:;88( )888888888888888" -ForegroundColor Green
-    Write-Host "888888888888888888888;:`"8ggg8`":;888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888aa:::aa88888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888888888888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888`"88888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
-    Write-Host "8888888888888888888888888:::8888888888888888888888888" -ForegroundColor Green
-    Write-Host "88888888888888888888888888a88888888888888888888888888" -ForegroundColor Green
-    Write-Host "`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"' `"`"`"`"`"`"`"`"`"' `"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"`"" -ForegroundColor Green
-    Write-Host "                                   Normand  Veilleux" -ForegroundColor DarkGray
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888"""""""""""""""8888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888               8888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888               8888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888               888888888888888888888888888888888"' -ForegroundColor Green
+    Write-Host '8888aaaaaaaaaaaaaaa888888888888888888888888888888888a' -ForegroundColor Green
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888":::::"88888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888::;gPPRg;::888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888::dP''   `Yb::88888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888::8)     (8::88888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888;:Yb     dP:;88( )888888888888888' -ForegroundColor Green
+    Write-Host '888888888888888888888;:"8ggg8":;888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888aa:::aa88888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888888888888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888"88888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
+    Write-Host '8888888888888888888888888:::8888888888888888888888888' -ForegroundColor Green
+    Write-Host '88888888888888888888888888a88888888888888888888888888' -ForegroundColor Green
+    Write-Host '"""""""""""""""""""'' `"""""""""'' `"""""""""""""""""""' -ForegroundColor Green
+    Write-Host '                                   Normand  Veilleux' -ForegroundColor DarkGray
     Write-Host "=====================================================" -ForegroundColor Cyan
-    Write-Host "       GERENCIADOR AVANCADO DE DRIVERS v2.2          " -ForegroundColor Green
+    Write-Host "       GERENCIADOR AVANCADO DE DRIVERS v2.3          " -ForegroundColor Green
     Write-Host "=====================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "[1] Backup de Drivers (Antes de Formatar)" -ForegroundColor Yellow
