@@ -1,7 +1,7 @@
 @echo off
-:: =========================================================================
-:: LANÇADOR INTEGRADO DE FERRAMENTAS v3.0
-:: =========================================================================
+:: ======================================
+:: LANÇADOR INTEGRADO DE FERRAMENTAS v3.1
+:: ======================================
 chcp 65001 >nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content '%~f0' -Encoding UTF8 | Select-Object -Skip 8 | Out-String | Invoke-Expression"
 exit /b
@@ -13,7 +13,7 @@ exit /b
     Estrutura hierárquica dividida em 4 categorias principais (1 a 4) 
     e submenus numéricos de 1 a 9, otimizada para Teclado Numérico (Numpad).
 .NOTES
-    Versão: 4.0
+    Versão: 3.1
     Autor: Gabriel Lopes
 #>
 
@@ -485,7 +485,7 @@ function Backup-Arquivos {
 do {
     Draw-Header
     Write-Host "=====================================================" -ForegroundColor Cyan
-    Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.0           " -ForegroundColor Green
+    Write-Host "        PAINEL DE FERRAMENTAS DE TI - v3.1           " -ForegroundColor Green
     Write-Host "=====================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  [1] REDE        (Ping, IPConfig, Release/Renew, DNS)" -ForegroundColor White
