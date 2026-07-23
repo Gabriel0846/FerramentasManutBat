@@ -8,10 +8,10 @@ exit /b
 
 <#
 .SYNOPSIS
-    Ferramentas Unificadas de TI, Reparo, Rede e Licenciamento.
+    Ferramentas Unificadas de TI, Reparo, Rede, Licenciamento e Impressão.
 .DESCRIPTION
-    Estrutura hierárquica dividida em 4 categorias principais (1 a 4) 
-    e submenus numéricos de 1 a 9, otimizada para Teclado Numérico (Numpad).
+    Estrutura hierárquica dividida em 5 categorias principais (1 a 5) 
+    e submenus numéricos, otimizada para Teclado Numérico (Numpad).
 .NOTES
     Versão: 3.1
     Autor: Gabriel Lopes
@@ -124,7 +124,7 @@ function Menu-Reparo {
         Write-Host "  [2] Correcao de Sistema Media (SFC /Scannow)" -ForegroundColor White
         Write-Host "  [3] Correcao Avançada (DISM + SFC)" -ForegroundColor White
         Write-Host "  [4] Gerenciador de Tarefas / Processos" -ForegroundColor White
-        Write-Host "  [5] Limpeza de Temporarios e Spooler de Impressao" -ForegroundColor White
+        Write-Host "  [5] Limpeza de Temporarios" -ForegroundColor White
         Write-Host "  [6] Verificar Disco (CHKDSK com Diagnostico)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
@@ -188,20 +188,15 @@ function Gerenciador-Tarefas {
 
 function Limpeza-Temporarios {
     Clear-Host
-    Write-Host "--- LIMPEZA DE ARQUIVOS TEMPORÁRIOS E SPOOLER ---`n" -ForegroundColor Cyan
+    Write-Host "--- LIMPEZA DE ARQUIVOS TEMPORÁRIOS ---`n" -ForegroundColor Cyan
     
-    Write-Host "[1/3] Limpando pasta TEMP do usuario..." -ForegroundColor Yellow
+    Write-Host "[1/2] Limpando pasta TEMP do usuario..." -ForegroundColor Yellow
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
     
-    Write-Host "[2/3] Limpando pasta TEMP do sistema..." -ForegroundColor Yellow
+    Write-Host "[2/2] Limpando pasta TEMP do sistema..." -ForegroundColor Yellow
     Remove-Item -Path "$env:SystemRoot\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
     
-    Write-Host "[3/3] Reiniciando e limpando Spooler de Impressao..." -ForegroundColor Yellow
-    Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Start-Service -Name "Spooler" -ErrorAction SilentlyContinue
-    
-    Write-Host "`n[SUCESSO] Limpeza concluida com sucesso!" -ForegroundColor Green
+    Write-Host "`n[SUCESSO] Limpeza de temporarios concluida!" -ForegroundColor Green
     Read-Host "Pressione Enter para continuar"
 }
 
@@ -480,6 +475,116 @@ function Backup-Arquivos {
     Read-Host "Pressione Enter para continuar"
 }
 
+# --- 5. SUBMENU IMPRESSORAS ---
+
+function Menu-Impressoras {
+    do {
+        Draw-Header
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host "         [ 5. GERENCIADOR DE IMPRESSORAS ]           " -ForegroundColor Green
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host ""
+        
+        # Coleta e exibe automaticamente as impressoras instaladas
+        Write-Host "IMPRESSORAS INSTALADAS ENCONTRADAS:" -ForegroundColor Yellow
+        $printers = Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue
+        
+        if ($printers) {
+            for ($i = 0; $i -lt $printers.Count; $i++) {
+                $pName = $printers[$i].Name
+                $pPort = $printers[$i].PortName
+                $pStatus = if ($printers[$i].Default) { "[PADRÃO]" } else { "" }
+                Write-Host "  [$($i + 1)] $pName (Porta: $pPort) $pStatus" -ForegroundColor White
+            }
+        } else {
+            Write-Host "  [Nenhuma impressora instalada foi encontrada no sistema]" -ForegroundColor Gray
+        }
+        
+        Write-Host ""
+        Write-Host "-----------------------------------------------------" -ForegroundColor Gray
+        Write-Host "  [1] Limpeza Profunda do Spooler + Registro" -ForegroundColor White
+        Write-Host "  [2] Remover Impressora Instalada" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host " Opcao: " -NoNewline -ForegroundColor Yellow
+
+        $op = Read-KeyChoice
+        Write-Host $op
+
+        switch ($op) {
+            "1" { Limpeza-Spooler-Avancada }
+            "2" { Remover-Impressora -PrintersList $printers }
+        }
+    } while ($op -ne "0")
+}
+
+function Limpeza-Spooler-Avancada {
+    Clear-Host
+    Write-Host "--- LIMPEZA PROFUNDA DO SPOOLER E REGISTRO ---`n" -ForegroundColor Cyan
+
+    Write-Host "[1/4] Parando servico de Spooler de Impressao..." -ForegroundColor Yellow
+    Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "spoolsv" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+
+    Write-Host "[2/4] Limpando arquivos na pasta PRINTERS..." -ForegroundColor Yellow
+    $spoolPath = "$env:SystemRoot\System32\spool\PRINTERS\*"
+    Remove-Item -Path $spoolPath -Force -Recurse -ErrorAction SilentlyContinue
+    Write-Host "      -> Cache do disco esvaziado." -ForegroundColor Green
+
+    Write-Host "[3/4] Limpando chaves travadas no Registro do Windows..." -ForegroundColor Yellow
+    
+    # Limpa conexões fantasmas em HKCU
+    $userConnPath = "HKCU:\Printers\Connections"
+    if (Test-Path $userConnPath) {
+        Get-ChildItem -Path $userConnPath -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item -Path $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Write-Host "      -> Conexoes de impressora em HKCU limpas." -ForegroundColor Green
+    }
+
+    # Reseta propriedades de SpoolFile retidas em HKLM
+    $systemPrintPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Print\Printers"
+    if (Test-Path $systemPrintPath) {
+        Get-ChildItem -Path $systemPrintPath -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-ItemProperty -Path $_.PSPath -Name "SpoolFile" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $_.PSPath -Name "Attributes" -ErrorAction SilentlyContinue
+        }
+        Write-Host "      -> Pendencias no registro HKLM resetadas." -ForegroundColor Green
+    }
+
+    Write-Host "[4/4] Reiniciando servico de Spooler..." -ForegroundColor Yellow
+    Start-Service -Name "Spooler" -ErrorAction SilentlyContinue
+    
+    Write-Host "`n[SUCESSO] Spooler e chaves do registro limpos com sucesso!" -ForegroundColor Green
+    Read-Host "Pressione Enter para continuar"
+}
+
+function Remover-Impressora {
+    param ($PrintersList)
+    
+    if (-not $PrintersList) {
+        Write-Host "`n[AVISO] Nenhuma impressora disponivel para remocao." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    Write-Host ""
+    $indexChoice = Read-Host "Digite o numero do indice da impressora que deseja REMOVER (ou 0 para cancelar)"
+    
+    if ($indexChoice -match '^\d+$' -and [int]$indexChoice -gt 0 -and [int]$indexChoice -le $PrintersList.Count) {
+        $targetPrinter = $PrintersList[[int]$indexChoice - 1]
+        
+        Write-Host "`nRemovendo '$($targetPrinter.Name)'..." -ForegroundColor Yellow
+        Remove-CimInstance -InputObject $targetPrinter -ErrorAction SilentlyContinue
+        Write-Host "[SUCESSO] Impressora removida do sistema!" -ForegroundColor Green
+    } else {
+        Write-Host "Operacao cancelada." -ForegroundColor Yellow
+    }
+    Read-Host "Pressione Enter para continuar"
+}
+
 # --- LOOP PRINCIPAL DO PROGRAMA ---
 
 do {
@@ -492,10 +597,11 @@ do {
     Write-Host "  [2] REPARO      (SFC, DISM, Processos, Temp, CHKDSK)" -ForegroundColor White
     Write-Host "  [3] SISTEMA     (Info Hardware, Agendador, Chaves, MAS)" -ForegroundColor White
     Write-Host "  [4] ARQUIVOS    (Backup Robocopy)" -ForegroundColor White
+    Write-Host "  [5] IMPRESSORAS (Listagem, Spooler+Regedit, Desinstalar)" -ForegroundColor White
     Write-Host ""
     Write-Host "  [0] Sair do Programa" -ForegroundColor Red
     Write-Host "=====================================================" -ForegroundColor Cyan
-    Write-Host " Escolha uma categoria (1-4): " -NoNewline -ForegroundColor Yellow
+    Write-Host " Escolha uma categoria (1-5): " -NoNewline -ForegroundColor Yellow
 
     $choice = Read-KeyChoice
     Write-Host $choice
@@ -505,6 +611,7 @@ do {
         "2" { Menu-Reparo }
         "3" { Menu-Sistema }
         "4" { Menu-Arquivos }
+        "5" { Menu-Impressoras }
         "0" { Write-Host "`nSaindo do programa..." -ForegroundColor Green; break }
         default { Write-Host "`nOpcao invalida!" -ForegroundColor Red; Start-Sleep -Milliseconds 800 }
     }
