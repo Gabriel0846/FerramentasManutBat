@@ -3,7 +3,8 @@
 :: LANCADOR INTEGRADO DE FERRAMENTAS v4.3
 :: ======================================
 chcp 65001 >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$c = Get-Content '%~f0' -Encoding UTF8; $i = ($c | Select-String -Pattern 'PS_MARKER_START').LineNumber; $c[$i..($c.Count-1)] | Out-String | Invoke-Expression"
+set "SELF_PATH=%~f0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $c = Get-Content -LiteralPath $env:SELF_PATH -Encoding UTF8; $idx = -1; for ($j=0; $j -lt $c.Count; $j++) { if ($c[$j] -match 'PS_MARKER_START') { $idx = $j + 1; break } }; if ($idx -lt 0) { throw 'Marker PS_MARKER_START nao encontrado' }; $body = ($c[$idx..($c.Count-1)]) -join [Environment]::NewLine; Invoke-Expression $body } catch { Write-Host ''; Write-Host '==========================================' -ForegroundColor Red; Write-Host '   ERRO NO LAUNCHER' -ForegroundColor Red; Write-Host '==========================================' -ForegroundColor Red; Write-Host ('Mensagem: ' + $_.Exception.Message) -ForegroundColor Yellow; Write-Host ('Linha   : ' + $_.InvocationInfo.ScriptLineNumber) -ForegroundColor Gray; Write-Host ('Stack   : ' + $_.ScriptStackTrace) -ForegroundColor Gray; Write-Host ''; Read-Host 'Pressione Enter para sair' }"
 exit /b
 ::PS_MARKER_START
 
