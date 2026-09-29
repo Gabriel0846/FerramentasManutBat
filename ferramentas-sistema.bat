@@ -42,13 +42,13 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ArtMain = @(
 '                                     .:\  ',
 '             /\                     /   : ',
-' ''`.         /;Z                    /    / ',
+' ''`.        /;Z                    /    / ',
 ' \  \      /;Z                    /    /  ',
 '  \\ \    /;Z                    /  ///   ',
 '   \\ \  /;Z                    /  ///    ',
 '    \  \/_/____________________/    /     ',
 '     `/                         \  /      ',
-'     {  o    [+]       o  }''     Y         ',
+'     {  o    [+]       o  }''     >/       ',
 '      \_________________________/         '
 )
 
