@@ -1,6 +1,6 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.3
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.4
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
@@ -12,7 +12,7 @@ exit /b
 .SYNOPSIS
     Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras e Drivers.
 .DESCRIPTION
-    Versao 4.3 - Correcoes de robustez, deteccao PT-BR, progresso real e resiliencia.
+    Versao 4.4 - Backup/Restauracao de configuracoes de impressoras adicionado.
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -999,6 +999,8 @@ function Menu-Impressoras {
         Write-Host "-----------------------------------------------------" -ForegroundColor Gray
         Write-Host "  [1] Limpeza Profunda do Spooler + Registro" -ForegroundColor White
         Write-Host "  [2] Remover Impressora Instalada" -ForegroundColor White
+        Write-Host "  [3] Backup de Configuracoes de Impressoras" -ForegroundColor White
+        Write-Host "  [4] Restaurar Configuracoes de Impressoras" -ForegroundColor White
         Write-Host "  [0] Voltar" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host " Opcao: " -NoNewline -ForegroundColor Yellow
@@ -1007,6 +1009,8 @@ function Menu-Impressoras {
         switch ($op) {
             "1" { Limpeza-Spooler-Avancada }
             "2" { Remover-Impressora -PrintersList $printers }
+            "3" { Backup-Impressoras }
+            "4" { Restaurar-Impressoras }
         }
     } while ($op -ne "0")
 }
@@ -1079,6 +1083,200 @@ function Remover-Impressora {
     } else {
         Write-Host "Cancelado." -ForegroundColor Yellow
     }
+    Read-Host "`nPressione Enter para continuar"
+}
+
+function Backup-Impressoras {
+    Clear-Host
+    Write-Host "--- BACKUP DE CONFIGURACOES DE IMPRESSORAS ---`n" -ForegroundColor Cyan
+    Write-Host "Salva nome, driver, porta, compartilhamento e localizacao." -ForegroundColor Gray
+    Write-Host "Util para restaurar apos formatacao (junto com backup de drivers).`n" -ForegroundColor Gray
+
+    $backupPath = (Read-Host "Pasta de destino (ex: D:\BackupImpressoras)").Trim('"')
+    if ([string]::IsNullOrWhiteSpace($backupPath)) {
+        Write-Host "Operacao cancelada." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    if (-not (Test-Path $backupPath)) {
+        try {
+            New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+        } catch {
+            Write-Host "[ERRO] Nao foi possivel criar a pasta: $_" -ForegroundColor Red
+            Read-Host "Pressione Enter para continuar"
+            return
+        }
+    }
+
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $backupFile = Join-Path $backupPath "backup_impressoras_$timestamp.csv"
+    $latestFile = Join-Path $backupPath "backup_impressoras.csv"
+
+    try {
+        Write-Host "`nColetando informacoes das impressoras..." -ForegroundColor Yellow
+
+        $printers = Get-Printer -ErrorAction Stop | Select-Object Name, DriverName, PortName, Shared, ShareName, Published, Location, Comment, Type
+
+        if ($printers.Count -eq 0) {
+            Write-Host "[AVISO] Nenhuma impressora encontrada para fazer backup." -ForegroundColor Yellow
+        } else {
+            # Backup com timestamp (historico) + copia "latest" para restauracao automatica
+            $printers | Export-Csv -Path $backupFile -NoTypeInformation -Encoding UTF8 -Delimiter ';'
+            $printers | Export-Csv -Path $latestFile -NoTypeInformation -Encoding UTF8 -Delimiter ';'
+
+            Write-Host "[SUCESSO] Backup de $($printers.Count) impressora(s) salvo em:" -ForegroundColor Green
+            Write-Host "  $backupFile" -ForegroundColor White
+            Write-Host "  $latestFile (referencia para restauracao rapida)" -ForegroundColor Gray
+            Write-Host "`n[INFO] Recomenda-se tambem fazer o backup dos drivers (Menu Drivers -> opcao 1)." -ForegroundColor Gray
+        }
+    } catch {
+        Write-Host "[ERRO] Falha ao realizar o backup: $_" -ForegroundColor Red
+    }
+
+    Read-Host "`nPressione Enter para continuar"
+}
+
+function Restaurar-Impressoras {
+    Clear-Host
+    Write-Host "--- RESTAURACAO DE CONFIGURACOES DE IMPRESSORAS ---`n" -ForegroundColor Cyan
+    Write-Host "[INFO] Os drivers das impressoras devem estar previamente instalados." -ForegroundColor Yellow
+    Write-Host "       Use o Menu Drivers -> Restauracao de Drivers antes.`n" -ForegroundColor Gray
+
+    $backupPath = (Read-Host "Pasta onde esta o backup (ex: D:\BackupImpressoras)").Trim('"')
+    if ([string]::IsNullOrWhiteSpace($backupPath)) {
+        Write-Host "Operacao cancelada." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    # Procura automaticamente o backup_impressoras.csv
+    $backupFile = Join-Path $backupPath "backup_impressoras.csv"
+
+    # Se nao existir, procura o mais recente com timestamp
+    if (-not (Test-Path $backupFile)) {
+        $alternates = Get-ChildItem -Path $backupPath -Filter "backup_impressoras_*.csv" -ErrorAction SilentlyContinue |
+                      Sort-Object LastWriteTime -Descending
+        if ($alternates.Count -gt 0) {
+            $backupFile = $alternates[0].FullName
+            Write-Host "[INFO] Usando backup mais recente: $backupFile" -ForegroundColor Cyan
+        }
+    }
+
+    if (-not (Test-Path $backupFile)) {
+        Write-Host "[ERRO] Arquivo de backup nao encontrado em: $backupPath" -ForegroundColor Red
+        Write-Host "       Verifique o caminho e tente novamente." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    try {
+        $printers = @(Import-Csv -Path $backupFile -Delimiter ';' -Encoding UTF8)
+
+        if ($printers.Count -eq 0) {
+            Write-Host "[AVISO] O arquivo de backup esta vazio." -ForegroundColor Yellow
+            Read-Host "Pressione Enter para continuar"
+            return
+        }
+
+        Write-Host "`nEncontradas $($printers.Count) impressora(s) no backup." -ForegroundColor Cyan
+        $c = Read-Host "Restaurar todas? (S/N)"
+        if ($c -notmatch "^[Ss]$") { return }
+
+        Write-Host "`nIniciando restauracao..." -ForegroundColor Yellow
+
+        $sucesso = 0
+        $falha = 0
+        $falhasLista = @()
+
+        foreach ($p in $printers) {
+            Write-Host "`nProcessando: $($p.Name)" -ForegroundColor White
+            try {
+                # Etapa 1: Garante que a porta da impressora existe
+                $porta = Get-PrinterPort -Name $p.PortName -ErrorAction SilentlyContinue
+                if (-not $porta) {
+                    Write-Host "  - Criando porta '$($p.PortName)'..." -ForegroundColor Gray
+                    try {
+                        Add-PrinterPort -Name $p.PortName -ErrorAction Stop
+                        Write-Host "  - Porta criada." -ForegroundColor Gray
+                    } catch {
+                        Write-Host "  [AVISO] Nao foi possivel criar a porta automaticamente." -ForegroundColor Yellow
+                        Write-Host "          Crie manualmente em: Painel de Controle -> Dispositivos -> Impressoras" -ForegroundColor Yellow
+                        throw "Falha ao criar porta '$($p.PortName)': $($_.Exception.Message)"
+                    }
+                } else {
+                    Write-Host "  - Porta '$($p.PortName)' ja existe." -ForegroundColor Gray
+                }
+
+                # Etapa 2: Verifica driver instalado
+                $driverOk = $true
+                try {
+                    $drv = Get-PrinterDriver -Name $p.DriverName -ErrorAction SilentlyContinue
+                    if (-not $drv) {
+                        Write-Host "  [AVISO] Driver '$($p.DriverName)' nao esta instalado." -ForegroundColor Yellow
+                        $driverOk = $false
+                    }
+                } catch { }
+
+                # Etapa 3: Remove impressora existente com mesmo nome (recria)
+                $printerExiste = Get-Printer -Name $p.Name -ErrorAction SilentlyContinue
+                if ($printerExiste) {
+                    Write-Host "  - Impressora ja existe. Removendo para recriar..." -ForegroundColor Yellow
+                    Remove-Printer -Name $p.Name -ErrorAction SilentlyContinue
+                    Start-Sleep -Milliseconds 400
+                }
+
+                # Etapa 4: Cria a impressora
+                Write-Host "  - Criando impressora com driver '$($p.DriverName)'..." -ForegroundColor Gray
+                Add-Printer -Name $p.Name -DriverName $p.DriverName -PortName $p.PortName -ErrorAction Stop
+
+                # Etapa 5: Restaura compartilhamento, localizacao e comentario
+                if ($p.Shared -eq 'True') {
+                    $shareName = if ($p.ShareName) { $p.ShareName } else { $p.Name }
+                    Set-Printer -Name $p.Name -Shared $true -ShareName $shareName -ErrorAction SilentlyContinue
+                    Write-Host "  - Compartilhamento restaurado como '$shareName'." -ForegroundColor Gray
+                }
+                if ($p.Location) {
+                    Set-Printer -Name $p.Name -Location $p.Location -ErrorAction SilentlyContinue
+                }
+                if ($p.Comment) {
+                    Set-Printer -Name $p.Name -Comment $p.Comment -ErrorAction SilentlyContinue
+                }
+                if ($p.Published -eq 'True') {
+                    Set-Printer -Name $p.Name -Published $true -ErrorAction SilentlyContinue
+                }
+
+                Write-Host "  [SUCESSO] '$($p.Name)' restaurada." -ForegroundColor Green
+                $sucesso++
+            } catch {
+                Write-Host "  [FALHA] Nao foi possivel restaurar '$($p.Name)'." -ForegroundColor Red
+                Write-Host "          Detalhe: $($_.Exception.Message)" -ForegroundColor DarkGray
+                $falha++
+                $falhasLista += "$($p.Name) - $($_.Exception.Message)"
+            }
+        }
+
+        Write-Host "`n==========================================" -ForegroundColor Cyan
+        Write-Host "          RESUMO DA RESTAURACAO           " -ForegroundColor Cyan
+        Write-Host "==========================================" -ForegroundColor Cyan
+        Write-Host " Total no backup  : $($printers.Count)" -ForegroundColor White
+        Write-Host " Com SUCESSO      : $sucesso" -ForegroundColor Green
+        if ($falha -gt 0) {
+            Write-Host " Com FALHA        : $falha" -ForegroundColor Red
+            Write-Host "`n[INFO] Impressoras com falha precisam de atencao manual." -ForegroundColor Yellow
+            Write-Host "       Verifique se os drivers estao instalados (Menu Drivers -> opcao 2)." -ForegroundColor Yellow
+        }
+
+        # Salva log de falhas
+        if ($falhasLista.Count -gt 0) {
+            $logPath = Join-Path $backupPath "log_falhas_restauracao.txt"
+            $falhasLista | Out-File $logPath -Encoding UTF8
+            Write-Host "`nLog de falhas: $logPath" -ForegroundColor Gray
+        }
+    } catch {
+        Write-Host "[ERRO] Falha ao ler o arquivo de backup: $_" -ForegroundColor Red
+    }
+
     Read-Host "`nPressione Enter para continuar"
 }
 
@@ -1230,14 +1428,14 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.3           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.4           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  [1] REDE        (Ping, IPConfig, Release/Renew, DNS)" -ForegroundColor White
         Write-Host "  [2] REPARO      (SFC, DISM, Processos, Temp, CHKDSK)" -ForegroundColor White
         Write-Host "  [3] SISTEMA     (Info, Agendador, Chaves, MAS, Chute)" -ForegroundColor White
         Write-Host "  [4] ARQUIVOS    (Backup Robocopy, Espaco em disco)" -ForegroundColor White
-        Write-Host "  [5] IMPRESSORAS (Listagem, Spooler+Regedit, Desinstalar)" -ForegroundColor White
+        Write-Host "  [5] IMPRESSORAS (Listagem, Spooler, Backup/Restore)" -ForegroundColor White
         Write-Host "  [6] DRIVERS     (Backup, Restauracao, Windows Update)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Sair do Programa (ou pressione ESC)" -ForegroundColor Red
