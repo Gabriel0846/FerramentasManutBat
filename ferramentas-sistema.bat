@@ -1,10 +1,13 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.4
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.5
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $lines = [System.IO.File]::ReadAllLines($env:SELF_PATH, [System.Text.Encoding]::UTF8); $idx = [Array]::IndexOf($lines, '::PS_MARKER_START'); if ($idx -lt 0) { throw 'Marker ::PS_MARKER_START nao encontrado' }; if ($idx -ge $lines.Length - 1) { throw 'Nada apos o marker' }; $body = ($lines[($idx+1)..($lines.Length-1)]) -join [Environment]::NewLine; Invoke-Expression $body } catch { Write-Host ''; Write-Host '==========================================' -ForegroundColor Red; Write-Host '   ERRO NO LAUNCHER' -ForegroundColor Red; Write-Host '==========================================' -ForegroundColor Red; Write-Host ('Mensagem: ' + $_.Exception.Message) -ForegroundColor Yellow; Write-Host ('Linha   : ' + $_.InvocationInfo.ScriptLineNumber) -ForegroundColor Gray; Write-Host ('Stack   : ' + $_.ScriptStackTrace) -ForegroundColor Gray; Write-Host ''; Read-Host 'Pressione Enter para sair' }"
+set "TEMP_PS1=%TEMP%\launcher_temp_ti_%RANDOM%.ps1"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $lines = [System.IO.File]::ReadAllLines($env:SELF_PATH, [System.Text.Encoding]::UTF8); $idx = [Array]::IndexOf($lines, '::PS_MARKER_START'); if ($idx -lt 0) { throw 'Marker ::PS_MARKER_START nao encontrado' }; if ($idx -ge $lines.Length - 1) { throw 'Nada apos o marker' }; $body = ($lines[($idx+1)..($lines.Length-1)]) -join [Environment]::NewLine; Set-Content -Path '%TEMP_PS1%' -Value $body -Encoding UTF8; & powershell -NoProfile -ExecutionPolicy Bypass -File '%TEMP_PS1%' } catch { Write-Host ''; Write-Host '==========================================' -ForegroundColor Red; Write-Host '   ERRO NO LAUNCHER' -ForegroundColor Red; Write-Host '==========================================' -ForegroundColor Red; Write-Host ('Mensagem: ' + $_.Exception.Message) -ForegroundColor Yellow; Write-Host ('Linha   : ' + $_.InvocationInfo.ScriptLineNumber) -ForegroundColor Gray; Write-Host ('Stack   : ' + $_.ScriptStackTrace) -ForegroundColor Gray; Write-Host ''; Read-Host 'Pressione Enter para sair' } finally { if (Test-Path '%TEMP_PS1%') { Remove-Item '%TEMP_PS1%' -Force -ErrorAction SilentlyContinue } }"
+
 exit /b
 ::PS_MARKER_START
 
@@ -12,7 +15,8 @@ exit /b
 .SYNOPSIS
     Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras e Drivers.
 .DESCRIPTION
-    Versao 4.4 - Backup/Restauracao de configuracoes de impressoras adicionado.
+    Versao 4.5 - Compatibilidade SMB (Win11 x dispositivos antigos) e backup de AppData adicionados.
+                Backup/Restauracao de drivers passa a usar pasta DRIVER ao lado do executavel.
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -24,6 +28,9 @@ exit /b
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Continue"
 Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
+
+# Diretorio onde o executavel (.bat) esta rodando - base para BKP_APPDATA e DRIVER
+$ScriptDir = if ($env:SELF_PATH) { Split-Path -Path $env:SELF_PATH -Parent } else { (Get-Location).Path }
 
 # Verifica admin
 if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
@@ -139,7 +146,6 @@ function Get-ConsoleWidth {
 function Read-KeyChoice {
     try {
         $key = [Console]::ReadKey($true)
-        # Esc como "voltar" universal
         if ($key.Key -eq [ConsoleKey]::Escape) { return '0' }
         return $key.KeyChar
     } catch {
@@ -187,8 +193,6 @@ function Show-Spinner {
     Write-Host "`r$(' ' * ($Message.Length + 15))`r" -NoNewline
 }
 
-# --- Centralizacao baseada no canivete suico ---
-
 function Get-ArtCenter {
     param([string[]]$Art)
     $minLeft = [int]::MaxValue
@@ -205,7 +209,6 @@ function Get-ArtCenter {
     return [Math]::Round(($minLeft + $maxRight) / 2)
 }
 
-# Cache do centro do canivete (calculado uma vez)
 $Global:ArtMainCenter = Get-ArtCenter -Art $ArtMain
 
 function Draw-Header {
@@ -237,6 +240,26 @@ function Draw-Header {
     Write-Host ""
 }
 
+function Parse-SelecaoIndices {
+    param([string]$InputStr, [int]$Max)
+    $result = @()
+    if ([string]::IsNullOrWhiteSpace($InputStr)) { return $result }
+    $InputStr = $InputStr.Trim()
+    if ($InputStr -match '^[Tt]$') { return 1..$Max }
+    foreach ($parte in $InputStr -split ',') {
+        $parte = $parte.Trim()
+        if ($parte -match '^(\d+)-(\d+)$') {
+            $a = [int]$matches[1]; $b = [int]$matches[2]
+            if ($a -gt $b) { $tmp = $a; $a = $b; $b = $tmp }
+            for ($i = $a; $i -le $b; $i++) { if ($i -ge 1 -and $i -le $Max) { $result += $i } }
+        } elseif ($parte -match '^\d+$') {
+            $n = [int]$parte
+            if ($n -ge 1 -and $n -le $Max) { $result += $n }
+        }
+    }
+    return ($result | Sort-Object -Unique)
+}
+
 # =============================================================
 # 1. REDE
 # =============================================================
@@ -252,6 +275,7 @@ function Menu-Rede {
         Write-Host "  [2] Configuracao de Rede (IPConfig /All)" -ForegroundColor White
         Write-Host "  [3] Liberar e Renovar IP (Release / Renew)" -ForegroundColor White
         Write-Host "  [4] Limpar Cache de DNS (FlushDNS)" -ForegroundColor White
+        Write-Host "  [5] Compatibilidade SMB (Impressoras/Dispositivos Antigos)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
@@ -276,6 +300,7 @@ function Menu-Rede {
                 Write-Host "[SUCESSO] Cache DNS limpo." -ForegroundColor Green
                 Read-Host "`nPressione Enter para continuar"
             }
+            "5" { Corrigir-Compatibilidade-SMB }
         }
     } while ($op -ne "0")
 }
@@ -299,6 +324,46 @@ function Configuracao-Rede {
     Clear-Host
     Write-Host "--- CONFIGURACOES DE REDE ---`n" -ForegroundColor Cyan
     ipconfig /all
+    Read-Host "`nPressione Enter para continuar"
+}
+
+function Corrigir-Compatibilidade-SMB {
+    Clear-Host
+    Write-Host "--- COMPATIBILIDADE SMB (DISPOSITIVOS ANTIGOS) ---`n" -ForegroundColor Cyan
+    Write-Host "Aplica as configuracoes:" -ForegroundColor Yellow
+    Write-Host "  - AllowInsecureGuestAuth = 1 (registro)" -ForegroundColor Gray
+    Write-Host "  - RequireSecuritySignature = False (cliente SMB)" -ForegroundColor Gray
+    Write-Host "`nRecomendado APENAS em redes confiaveis/fechadas." -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Host "[1/3] Aplicando AllowInsecureGuestAuth via reg add..." -ForegroundColor Yellow
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v AllowInsecureGuestAuth /t REG_DWORD /d 1 /f | Out-Null
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "[2/3] Confirmando AllowInsecureGuestAuth via Set-ItemProperty..." -ForegroundColor Yellow
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "AllowInsecureGuestAuth" -Value 1 -Type DWord
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "[3/3] Desabilitando assinatura SMB do cliente..." -ForegroundColor Yellow
+    Set-SmbClientConfiguration -RequireSecuritySignature $False -Force
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "`n--- VERIFICACAO ---" -ForegroundColor Cyan
+    try {
+        $regVal = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "AllowInsecureGuestAuth" -ErrorAction SilentlyContinue).AllowInsecureGuestAuth
+        $smb = Get-SmbClientConfiguration -ErrorAction SilentlyContinue
+        Write-Host "  AllowInsecureGuestAuth   : $regVal" -ForegroundColor White
+        Write-Host "  RequireSecuritySignature : $($smb.RequireSecuritySignature)" -ForegroundColor White
+        Write-Host "  EnableInsecureGuestLogons: $($smb.EnableInsecureGuestLogons)" -ForegroundColor White
+        if ($regVal -eq 1 -and $smb.RequireSecuritySignature -eq $false) {
+            Write-Host "`n[SUCESSO] Configuracoes aplicadas." -ForegroundColor Green
+            Write-Host "[INFO] Recomenda-se reiniciar o computador para garantir efeito total." -ForegroundColor Yellow
+        } else {
+            Write-Host "`n[AVISO] Valores nao conferem. Verifique manualmente." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[AVISO] Falha na verificacao: $_" -ForegroundColor Yellow
+    }
     Read-Host "`nPressione Enter para continuar"
 }
 
@@ -417,7 +482,6 @@ function Verificar-Disco {
     Write-Host "          RESUMO DO DIAGNOSTICO           " -ForegroundColor Cyan
     Write-Host "==========================================" -ForegroundColor Cyan
 
-    # Deteccao PT-BR + EN
     $saudavel = $out -match "found no problems|nao encontrou problemas|não encontrou problemas|no problems found|Windows has checked"
     $comErros = $out -match "found errors|encontrou erros|errors found"
 
@@ -453,6 +517,7 @@ function Menu-Sistema {
         Write-Host "  [4] Diagnostico / Chave do Windows" -ForegroundColor White
         Write-Host "  [5] Diagnostico / Chave do Office" -ForegroundColor White
         Write-Host "  [6] Chutar Chave do Windows (coringa *)" -ForegroundColor White
+        Write-Host "  [7] Backup de AppData dos Usuarios" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
@@ -466,6 +531,7 @@ function Menu-Sistema {
             "4" { Get-WindowsKey }
             "5" { Get-OfficeKey }
             "6" { Chutar-Chave-Windows }
+            "7" { Backup-AppData }
         }
     } while ($op -ne "0")
 }
@@ -560,7 +626,6 @@ function Get-WindowsKey {
 
     $foundAny = $false
 
-    # [1] Chave OEM na BIOS
     try {
         $biosKey = (Get-CimInstance -Query 'select OA3xOriginalProductKey from SoftwareLicensingService').OA3xOriginalProductKey
         if ($biosKey -and $biosKey.Trim() -ne "") {
@@ -571,7 +636,6 @@ function Get-WindowsKey {
         }
     } catch {}
 
-    # [2] Licenca instalada
     try {
         $digitalLic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" |
                       Where-Object { $_.ApplicationId -eq '55c9273a-2b2c-4032-9916-e0625a639257' } |
@@ -600,7 +664,6 @@ function Get-WindowsKey {
         }
     } catch {}
 
-    # [3] Canal via slmgr /dli (PT-BR + EN)
     try {
         $dli = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /dli 2>&1 | Out-String
         if ($dli -match "RETAIL|OEM|VOLUME|MAK|KMS|Varejo|Corporativ") {
@@ -615,7 +678,6 @@ function Get-WindowsKey {
         }
     } catch {}
 
-    # [4] Status geral via /xpr (PT-BR + EN)
     try {
         $xpr = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /xpr 2>&1 | Out-String
         if ($xpr -match "permanently activated|ativado permanentemente|permanentemente ativado") {
@@ -637,7 +699,6 @@ function Get-OfficeKey {
     Clear-Host
     Write-Host "--- DIAGNOSTICO DE LICENCA DO OFFICE ---`n" -ForegroundColor Cyan
 
-    # Detecta Click-to-Run (Office 365/2016+ via Store)
     $c2rFound = $false
     try {
         $c2r = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction Stop
@@ -742,7 +803,6 @@ function Chutar-Chave-Windows {
     Write-Host "`nFormato: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX  (* para desconhecidos)" -ForegroundColor White
     Write-Host "Exemplo: NPPR9-FWDCX-D2C8J-*****-*****`n" -ForegroundColor Gray
 
-    # Verifica se ha progresso salvo
     $stateFile = Join-Path $env:TEMP "chute_progress.json"
     $resume = $false
     if (Test-Path $stateFile) {
@@ -790,7 +850,6 @@ function Chutar-Chave-Windows {
         if ($c -notmatch "^[Ss]$") { return }
     }
 
-    # Mapeia edicao alvo
     $alvoLower = $soAlvo.ToLower()
     $expectedEdition = "Professional"
     if ($alvoLower -match "starter")           { $expectedEdition = "Starter" }
@@ -807,7 +866,6 @@ function Chutar-Chave-Windows {
     elseif ($alvoLower -match "pro n")         { $expectedEdition = "Professional N" }
     elseif ($alvoLower -match "pro")           { $expectedEdition = "Professional" }
 
-    # Indices dos asteriscos
     $astIdx = @()
     for ($i = 0; $i -lt 25; $i++) { if ($raw[$i] -eq '*') { $astIdx += $i } }
 
@@ -831,7 +889,6 @@ function Chutar-Chave-Windows {
             $chaveFinal = -join $chaveArr
             $chaveFmt = ($chaveFinal -replace '(.{5})(?=.)', '$1-')
 
-            # Barra de progresso
             $percent = [math]::Round(($tentativa / $total) * 100)
             $barWidth = 25
             $filled = [math]::Round(($tentativa / $total) * $barWidth)
@@ -845,14 +902,12 @@ function Chutar-Chave-Windows {
             if ($linha.Length -gt 110) { $linha = $linha.Substring(0, 110) }
             Write-Host "`r$linha" -NoNewline -ForegroundColor Cyan
 
-            # Salva progresso a cada 30 segundos
             if (((Get-Date) - $lastSave).TotalSeconds -ge 30) {
                 @{ pattern = $pattern; soAlvo = $soAlvo; indice = $tentativa; total = $total } |
                     ConvertTo-Json | Out-File $stateFile -Encoding UTF8
                 $lastSave = Get-Date
             }
 
-            # Testa a chave
             $res = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /ipk $chaveFmt 2>&1 | Out-String
 
             if ($res -match "instalada com .xito|installed successfully|product key installed successfully|instalada com sucesso") {
@@ -901,6 +956,139 @@ function Chutar-Chave-Windows {
     Read-Host "`nPressione Enter para continuar"
 }
 
+function Backup-AppData {
+    Clear-Host
+    Write-Host "--- BACKUP DE APPDATA DOS USUARIOS ---`n" -ForegroundColor Cyan
+    Write-Host "Copia Roaming, LocalLow e Local de cada usuario selecionado." -ForegroundColor Gray
+    Write-Host "Arquivos em uso serao pulados e listados no final.`n" -ForegroundColor Gray
+
+    $profiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+        Where-Object {
+            -not $_.Special -and
+            $_.LocalPath -and
+            $_.LocalPath -match '\\Users\\' -and
+            $_.LocalPath -notmatch '\\Users\\(Default|Default User|Public|All Users)$'
+        } | Sort-Object LocalPath
+
+    if (-not $profiles -or $profiles.Count -eq 0) {
+        Write-Host "[AVISO] Nenhum perfil de usuario encontrado." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    Write-Host "Usuarios encontrados:`n" -ForegroundColor Yellow
+    for ($i = 0; $i -lt $profiles.Count; $i++) {
+        $u = Split-Path $profiles[$i].LocalPath -Leaf
+        Write-Host ("  [{0}] {1}" -f ($i + 1), $u) -ForegroundColor White
+    }
+    Write-Host "`n  [T] Todos" -ForegroundColor Cyan
+    Write-Host "`nDigite numeros (ex: 1,3) ou intervalo (ex: 1-3) ou T." -ForegroundColor Gray
+    $sel = Read-Host "Selecao"
+
+    $indices = Parse-SelecaoIndices -InputStr $sel -Max $profiles.Count
+    if ($indices.Count -eq 0) {
+        Write-Host "`nNenhum usuario selecionado." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    $backupRoot = Join-Path $ScriptDir "BKP_APPDATA"
+    if (-not (Test-Path $backupRoot)) {
+        try {
+            New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+        } catch {
+            Write-Host "[ERRO] Nao foi possivel criar a pasta: $_" -ForegroundColor Red
+            Read-Host "Pressione Enter para continuar"
+            return
+        }
+    }
+
+    Write-Host "`nDestino: $backupRoot" -ForegroundColor Cyan
+    Write-Host "Usuarios selecionados: $($indices.Count)`n" -ForegroundColor Cyan
+
+    $resumo = @()
+    $todasFalhas = @()
+    $contador = 0
+
+    foreach ($idx in $indices) {
+        $contador++
+        $profile = $profiles[$idx - 1]
+        $userName = Split-Path $profile.LocalPath -Leaf
+        $srcAppData = Join-Path $profile.LocalPath "AppData"
+        $dstAppData = Join-Path $backupRoot $userName
+
+        Write-Host "`n===============================================" -ForegroundColor DarkCyan
+        Write-Host " [$contador/$($indices.Count)] Usuario: $userName" -ForegroundColor Green
+        Write-Host "===============================================" -ForegroundColor DarkCyan
+
+        if (-not (Test-Path $srcAppData)) {
+            Write-Host "  [AVISO] Pasta AppData nao encontrada em: $srcAppData" -ForegroundColor Yellow
+            $resumo += [PSCustomObject]@{ Usuario = $userName; Status = "AppData nao encontrada"; Tamanho = "0"; Arquivos = 0; Falhas = 0 }
+            continue
+        }
+
+        Write-Host "  Copiando $srcAppData -> $dstAppData ..." -ForegroundColor Yellow
+        Write-Host "  (arquivos travados serao pulados)" -ForegroundColor Gray
+
+        $robOut = robocopy $srcAppData $dstAppData /E /B /R:1 /W:1 /XJ /NP /NFL /NDL 2>&1 | Out-String
+        $exitCode = $LASTEXITCODE
+
+        $falhasArq = @()
+        foreach ($linha in ($robOut -split "`r?`n")) {
+            if ($linha -match '(?:ERROR|ERRO)\s+\d+\s+\(0x[0-9A-Fa-f]+\)\s+.*?([A-Z]:\\[^\r\n]+)') {
+                $caminho = $matches[1].Trim()
+                if ($caminho) { $falhasArq += $caminho }
+            }
+        }
+
+        $tamanhoBytes = 0
+        $numArquivos = 0
+        if (Test-Path $dstAppData) {
+            $arquivos = Get-ChildItem $dstAppData -Recurse -Force -File -ErrorAction SilentlyContinue
+            $numArquivos = $arquivos.Count
+            $soma = ($arquivos | Measure-Object -Property Length -Sum).Sum
+            if ($soma) { $tamanhoBytes = $soma }
+        }
+        $tamanhoGB = [math]::Round($tamanhoBytes / 1GB, 2)
+
+        Write-Host "  [OK] Copia concluida (codigo robocopy: $exitCode)" -ForegroundColor Green
+        Write-Host "       Tamanho: $tamanhoGB GB | Arquivos: $numArquivos | Falhas: $($falhasArq.Count)" -ForegroundColor White
+
+        $resumo += [PSCustomObject]@{
+            Usuario  = $userName
+            Status   = "OK"
+            Tamanho  = "$tamanhoGB GB"
+            Arquivos = $numArquivos
+            Falhas   = $falhasArq.Count
+        }
+
+        foreach ($f in $falhasArq) {
+            $todasFalhas += [PSCustomObject]@{ Usuario = $userName; Arquivo = $f }
+        }
+    }
+
+    Write-Host "`n`n==========================================" -ForegroundColor Cyan
+    Write-Host "          RESUMO GERAL DO BACKUP           " -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    $resumo | Format-Table -AutoSize
+
+    if ($todasFalhas.Count -gt 0) {
+        Write-Host "--- ARQUIVOS QUE NAO PUDERAM SER COPIADOS ---" -ForegroundColor Yellow
+        $max = [Math]::Min(20, $todasFalhas.Count)
+        for ($i = 0; $i -lt $max; $i++) {
+            Write-Host ("  [$($todasFalhas[$i].Usuario)] $($todasFalhas[$i].Arquivo)") -ForegroundColor DarkGray
+        }
+        if ($todasFalhas.Count -gt 20) {
+            Write-Host "  ... e mais $($todasFalhas.Count - 20) arquivo(s) com falha." -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host "`n[SUCESSO] Nenhuma falha registrada." -ForegroundColor Green
+    }
+
+    Write-Host "`nBackup salvo em: $backupRoot" -ForegroundColor Cyan
+    Read-Host "`nPressione Enter para continuar"
+}
+
 # =============================================================
 # 4. ARQUIVOS
 # =============================================================
@@ -943,7 +1131,6 @@ function Backup-Arquivos {
 
     if (-not (Test-Path $source)) { Write-Host "[ERRO] Origem invalida." -ForegroundColor Red; Read-Host; return }
 
-    # Verifica espaco livre
     try {
         $destDrive = (Split-Path $dest -Qualifier).TrimEnd(':')
         $free = (Get-PSDrive -Name $destDrive -ErrorAction Stop).Free
@@ -1023,7 +1210,6 @@ function Limpeza-Spooler-Avancada {
     Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 800
 
-    # Verifica se parou de fato
     $srv = Get-Service -Name "Spooler" -ErrorAction SilentlyContinue
     if ($srv.Status -ne 'Stopped') {
         Write-Host "      [AVISO] Spooler nao parou. Forcando termino do processo..." -ForegroundColor Yellow
@@ -1121,7 +1307,6 @@ function Backup-Impressoras {
         if ($printers.Count -eq 0) {
             Write-Host "[AVISO] Nenhuma impressora encontrada para fazer backup." -ForegroundColor Yellow
         } else {
-            # Backup com timestamp (historico) + copia "latest" para restauracao automatica
             $printers | Export-Csv -Path $backupFile -NoTypeInformation -Encoding UTF8 -Delimiter ';'
             $printers | Export-Csv -Path $latestFile -NoTypeInformation -Encoding UTF8 -Delimiter ';'
 
@@ -1150,10 +1335,8 @@ function Restaurar-Impressoras {
         return
     }
 
-    # Procura automaticamente o backup_impressoras.csv
     $backupFile = Join-Path $backupPath "backup_impressoras.csv"
 
-    # Se nao existir, procura o mais recente com timestamp
     if (-not (Test-Path $backupFile)) {
         $alternates = Get-ChildItem -Path $backupPath -Filter "backup_impressoras_*.csv" -ErrorAction SilentlyContinue |
                       Sort-Object LastWriteTime -Descending
@@ -1192,7 +1375,6 @@ function Restaurar-Impressoras {
         foreach ($p in $printers) {
             Write-Host "`nProcessando: $($p.Name)" -ForegroundColor White
             try {
-                # Etapa 1: Garante que a porta da impressora existe
                 $porta = Get-PrinterPort -Name $p.PortName -ErrorAction SilentlyContinue
                 if (-not $porta) {
                     Write-Host "  - Criando porta '$($p.PortName)'..." -ForegroundColor Gray
@@ -1208,7 +1390,6 @@ function Restaurar-Impressoras {
                     Write-Host "  - Porta '$($p.PortName)' ja existe." -ForegroundColor Gray
                 }
 
-                # Etapa 2: Verifica driver instalado
                 $driverOk = $true
                 try {
                     $drv = Get-PrinterDriver -Name $p.DriverName -ErrorAction SilentlyContinue
@@ -1218,7 +1399,6 @@ function Restaurar-Impressoras {
                     }
                 } catch { }
 
-                # Etapa 3: Remove impressora existente com mesmo nome (recria)
                 $printerExiste = Get-Printer -Name $p.Name -ErrorAction SilentlyContinue
                 if ($printerExiste) {
                     Write-Host "  - Impressora ja existe. Removendo para recriar..." -ForegroundColor Yellow
@@ -1226,11 +1406,9 @@ function Restaurar-Impressoras {
                     Start-Sleep -Milliseconds 400
                 }
 
-                # Etapa 4: Cria a impressora
                 Write-Host "  - Criando impressora com driver '$($p.DriverName)'..." -ForegroundColor Gray
                 Add-Printer -Name $p.Name -DriverName $p.DriverName -PortName $p.PortName -ErrorAction Stop
 
-                # Etapa 5: Restaura compartilhamento, localizacao e comentario
                 if ($p.Shared -eq 'True') {
                     $shareName = if ($p.ShareName) { $p.ShareName } else { $p.Name }
                     Set-Printer -Name $p.Name -Shared $true -ShareName $shareName -ErrorAction SilentlyContinue
@@ -1267,7 +1445,6 @@ function Restaurar-Impressoras {
             Write-Host "       Verifique se os drivers estao instalados (Menu Drivers -> opcao 2)." -ForegroundColor Yellow
         }
 
-        # Salva log de falhas
         if ($falhasLista.Count -gt 0) {
             $logPath = Join-Path $backupPath "log_falhas_restauracao.txt"
             $falhasLista | Out-File $logPath -Encoding UTF8
@@ -1291,8 +1468,8 @@ function Menu-Drivers {
         Write-Host "           [ 6. GERENCIADOR DE DRIVERS ]             " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "  [1] Backup de Drivers" -ForegroundColor White
-        Write-Host "  [2] Restauracao de Drivers (rapida)" -ForegroundColor White
+        Write-Host "  [1] Backup de Drivers (pasta DRIVER ao lado do exe)" -ForegroundColor White
+        Write-Host "  [2] Restauracao de Drivers (detecta DRIVER automatico)" -ForegroundColor White
         Write-Host "  [3] Buscar Atualizacoes (Windows Update)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
@@ -1311,13 +1488,22 @@ function Menu-Drivers {
 function Backup-Drivers {
     Clear-Host
     Write-Host "--- BACKUP DE DRIVERS ---`n" -ForegroundColor Cyan
-    $backupPath = (Read-Host "Pasta de destino (ex: D:\DriversBackup)").Trim('"')
-    if (-not $backupPath) { Write-Host "Invalido." -ForegroundColor Red; Read-Host; return }
-    if (-not (Test-Path $backupPath)) { New-Item -ItemType Directory -Path $backupPath -Force | Out-Null }
+
+    $backupPath = Join-Path $ScriptDir "DRIVER"
+    Write-Host "Destino: $backupPath" -ForegroundColor Cyan
+
+    if (-not (Test-Path $backupPath)) {
+        try {
+            New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+        } catch {
+            Write-Host "[ERRO] Nao foi possivel criar a pasta: $_" -ForegroundColor Red
+            Read-Host "Pressione Enter para continuar"
+            return
+        }
+    }
 
     Write-Host "`nExportando drivers de terceiros..." -ForegroundColor Yellow
 
-    # Executa pnputil em background e mostra spinner
     $proc = Start-Process pnputil -ArgumentList "/export-driver * `"$backupPath`"" -NoNewWindow -PassThru
     while (-not $proc.HasExited) {
         Write-Host "`r$('|/-\'[(Get-Random -Max 4)]) Exportando... (pode demorar)" -NoNewline -ForegroundColor Cyan
@@ -1326,11 +1512,9 @@ function Backup-Drivers {
     $proc.WaitForExit()
     Write-Host "`r$(' ' * 60)`r" -NoNewline
 
-    # DISM como redundancia
     Write-Host "Executando DISM export (redundancia)..." -ForegroundColor Yellow
     dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Null
 
-    # Conta drivers exportados
     $countInf = (Get-ChildItem $backupPath -Filter "*.inf" -Recurse -ErrorAction SilentlyContinue).Count
     Write-Host "[SUCESSO] $countInf driver(s) exportado(s) para: $backupPath" -ForegroundColor Green
     Read-Host "`nPressione Enter para continuar"
@@ -1339,19 +1523,65 @@ function Backup-Drivers {
 function Restore-Drivers {
     Clear-Host
     Write-Host "--- RESTAURACAO DE DRIVERS ---`n" -ForegroundColor Cyan
-    $backupPath = (Read-Host "Pasta do backup (ex: D:\DriversBackup)").Trim('"')
-    if (-not (Test-Path $backupPath)) { Write-Host "[ERRO] Pasta nao existe." -ForegroundColor Red; Read-Host; return }
+
+    $driverDir = Join-Path $ScriptDir "DRIVER"
+    $backupPath = $null
+
+    $autoInf = @()
+    if (Test-Path $driverDir) {
+        $autoInf = @(Get-ChildItem -Path $driverDir -Filter "*.inf" -Recurse -ErrorAction SilentlyContinue)
+    }
+
+    if ($autoInf.Count -gt 0) {
+        $backupPath = $driverDir
+        Write-Host "[INFO] Pasta DRIVER encontrada automaticamente: $backupPath" -ForegroundColor Cyan
+    } else {
+        if (Test-Path $driverDir) {
+            Write-Host "[AVISO] Pasta DRIVER existe, mas nao contem .inf." -ForegroundColor Yellow
+        } else {
+            Write-Host "[INFO] Pasta DRIVER nao encontrada ao lado do executavel." -ForegroundColor Yellow
+        }
+        $backupPath = (Read-Host "`nInforme o caminho do backup de drivers (ex: D:\DriversBackup)").Trim('"')
+        if (-not (Test-Path $backupPath)) {
+            Write-Host "[ERRO] Pasta nao existe." -ForegroundColor Red
+            Read-Host "Pressione Enter para continuar"
+            return
+        }
+    }
 
     $infFiles = @(Get-ChildItem -Path $backupPath -Filter "*.inf" -Recurse -ErrorAction SilentlyContinue)
-    if ($infFiles.Count -eq 0) { Write-Host "[AVISO] Nenhum .inf encontrado." -ForegroundColor Yellow; Read-Host; return }
+    if ($infFiles.Count -eq 0) {
+        Write-Host "[AVISO] Nenhum .inf encontrado em: $backupPath" -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
 
-    Write-Host "`nEncontrados $($infFiles.Count) drivers." -ForegroundColor Cyan
-    Write-Host "Instalando em lote (rapido)..." -ForegroundColor Yellow
+    Write-Host "`nEncontrados $($infFiles.Count) driver(s) em: $backupPath`n" -ForegroundColor Cyan
+    $i = 1
+    foreach ($inf in $infFiles) {
+        $provider = "Desconhecido"
+        try {
+            $content = Get-Content $inf.FullName -Raw -ErrorAction SilentlyContinue
+            if ($content -match '(?im)^\s*Provider\s*=\s*"?([^"\r\n]+)"?') {
+                $provider = $matches[1].Trim()
+            }
+        } catch {}
+        Write-Host ("  [{0,2}] {1,-30} - {2}" -f $i, $provider, $inf.Name) -ForegroundColor White
+        $i++
+    }
+
+    $conf = Read-Host "`nInstalar todos esses drivers? (S/N)"
+    if ($conf -notmatch "^[Ss]$") {
+        Write-Host "Operacao cancelada." -ForegroundColor Yellow
+        Read-Host "Pressione Enter para continuar"
+        return
+    }
+
+    Write-Host "`nInstalando em lote (rapido)..." -ForegroundColor Yellow
 
     $logFile = Join-Path $backupPath "log_erros_drivers.txt"
     if (Test-Path $logFile) { Remove-Item $logFile -Force }
 
-    # Executa pnputil em lote com spinner
     $tmpOut = Join-Path $env:TEMP "pnputil_out.txt"
     $proc = Start-Process cmd -ArgumentList "/c pnputil /add-driver `"$backupPath\*.inf`" /subdirs /install > `"$tmpOut`" 2>&1" -NoNewWindow -PassThru
     while (-not $proc.HasExited) {
@@ -1361,12 +1591,10 @@ function Restore-Drivers {
     $proc.WaitForExit()
     Write-Host "`r$(' ' * 60)`r" -NoNewline
 
-    # Parse do output
     $output = if (Test-Path $tmpOut) { Get-Content $tmpOut -Raw } else { "" }
     $sucesso = ([regex]::Matches($output, "successfully added|adicionado com .xito|instalado com sucesso|imported successfully")).Count
     $falha = ([regex]::Matches($output, "failed to add|falha|error", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)).Count
 
-    # Fallback se nao conseguiu parsear
     if ($sucesso -eq 0 -and $falha -eq 0) {
         Write-Host "[INFO] pnputil nao reportou contadores individuais." -ForegroundColor Yellow
         Write-Host "       Total de drivers processados: $($infFiles.Count)" -ForegroundColor White
@@ -1379,7 +1607,6 @@ function Restore-Drivers {
         if ($falha -gt 0) { Write-Host " Com FALHA         : $falha" -ForegroundColor Red }
     }
 
-    # Salva output bruto como log
     $output | Out-File $logFile -Encoding UTF8
     Write-Host "`nLog completo em: $logFile" -ForegroundColor Yellow
     Write-Host "`nRecomenda-se reiniciar o computador." -ForegroundColor Yellow
@@ -1428,12 +1655,12 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.4           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.5           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "  [1] REDE        (Ping, IPConfig, Release/Renew, DNS)" -ForegroundColor White
+        Write-Host "  [1] REDE        (Ping, IP, Release/Renew, DNS, SMB)" -ForegroundColor White
         Write-Host "  [2] REPARO      (SFC, DISM, Processos, Temp, CHKDSK)" -ForegroundColor White
-        Write-Host "  [3] SISTEMA     (Info, Agendador, Chaves, MAS, Chute)" -ForegroundColor White
+        Write-Host "  [3] SISTEMA     (Info, Agendador, Chaves, MAS, AppData)" -ForegroundColor White
         Write-Host "  [4] ARQUIVOS    (Backup Robocopy, Espaco em disco)" -ForegroundColor White
         Write-Host "  [5] IMPRESSORAS (Listagem, Spooler, Backup/Restore)" -ForegroundColor White
         Write-Host "  [6] DRIVERS     (Backup, Restauracao, Windows Update)" -ForegroundColor White

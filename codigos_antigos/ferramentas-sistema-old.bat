@@ -4,10 +4,7 @@
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
-set "TEMP_PS1=%TEMP%\launcher_temp_ti_%RANDOM%.ps1"
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $lines = [System.IO.File]::ReadAllLines($env:SELF_PATH, [System.Text.Encoding]::UTF8); $idx = [Array]::IndexOf($lines, '::PS_MARKER_START'); if ($idx -lt 0) { throw 'Marker ::PS_MARKER_START nao encontrado' }; if ($idx -ge $lines.Length - 1) { throw 'Nada apos o marker' }; $body = ($lines[($idx+1)..($lines.Length-1)]) -join [Environment]::NewLine; Set-Content -Path '%TEMP_PS1%' -Value $body -Encoding UTF8; & powershell -NoProfile -ExecutionPolicy Bypass -File '%TEMP_PS1%' } catch { Write-Host ''; Write-Host '==========================================' -ForegroundColor Red; Write-Host '   ERRO NO LAUNCHER' -ForegroundColor Red; Write-Host '==========================================' -ForegroundColor Red; Write-Host ('Mensagem: ' + $_.Exception.Message) -ForegroundColor Yellow; Write-Host ('Linha   : ' + $_.InvocationInfo.ScriptLineNumber) -ForegroundColor Gray; Write-Host ('Stack   : ' + $_.ScriptStackTrace) -ForegroundColor Gray; Write-Host ''; Read-Host 'Pressione Enter para sair' } finally { if (Test-Path '%TEMP_PS1%') { Remove-Item '%TEMP_PS1%' -Force -ErrorAction SilentlyContinue } }"
-
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $lines = [System.IO.File]::ReadAllLines($env:SELF_PATH, [System.Text.Encoding]::UTF8); $idx = [Array]::IndexOf($lines, '::PS_MARKER_START'); if ($idx -lt 0) { throw 'Marker ::PS_MARKER_START nao encontrado' }; if ($idx -ge $lines.Length - 1) { throw 'Nada apos o marker' }; $body = ($lines[($idx+1)..($lines.Length-1)]) -join [Environment]::NewLine; Invoke-Expression $body } catch { Write-Host ''; Write-Host '==========================================' -ForegroundColor Red; Write-Host '   ERRO NO LAUNCHER' -ForegroundColor Red; Write-Host '==========================================' -ForegroundColor Red; Write-Host ('Mensagem: ' + $_.Exception.Message) -ForegroundColor Yellow; Write-Host ('Linha   : ' + $_.InvocationInfo.ScriptLineNumber) -ForegroundColor Gray; Write-Host ('Stack   : ' + $_.ScriptStackTrace) -ForegroundColor Gray; Write-Host ''; Read-Host 'Pressione Enter para sair' }"
 exit /b
 ::PS_MARKER_START
 
