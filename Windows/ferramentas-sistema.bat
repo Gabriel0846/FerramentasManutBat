@@ -1,6 +1,6 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.5
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.6
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
@@ -13,10 +13,9 @@ exit /b
 
 <#
 .SYNOPSIS
-    Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras e Drivers.
+    Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras, Drivers e Aplicativos.
 .DESCRIPTION
-    Versao 4.5 - Compatibilidade SMB (Win11 x dispositivos antigos) e backup de AppData adicionados.
-                Backup/Restauracao de drivers passa a usar pasta DRIVER ao lado do executavel.
+    Versao 4.6 - Menu de Aplicativos adicionado (Reset AnyDesk).
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -29,10 +28,8 @@ exit /b
 $ErrorActionPreference = "Continue"
 Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
 
-# Diretorio onde o executavel (.bat) esta rodando - base para BKP_APPDATA e DRIVER
 $ScriptDir = if ($env:SELF_PATH) { Split-Path -Path $env:SELF_PATH -Parent } else { (Get-Location).Path }
 
-# Verifica admin
 if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Host "=====================================================================" -ForegroundColor Red
     Write-Host "   ESTE SCRIPT PRECISA SER EXECUTADO COMO ADMINISTRADOR!" -ForegroundColor Red
@@ -135,6 +132,15 @@ $ArtDrivers = @(
 ' ''--''--------------------''--'''
 )
 
+$ArtApps = @(
+'    _____ _____  ',
+'   /  _  |  _  | ',
+'  |  |_| |  |_| |',
+'  |   _   |   _  |',
+'  |__| |__|__| |__|',
+'   APLICATIVOS   '
+)
+
 # =============================================================
 # FUNCOES AUXILIARES
 # =============================================================
@@ -151,46 +157,6 @@ function Read-KeyChoice {
     } catch {
         return '0'
     }
-}
-
-function Show-ProgressBar {
-    param(
-        [int]$Current,
-        [int]$Total,
-        [string]$Activity = "Processando",
-        [string]$Detail = ""
-    )
-    if ($Total -le 0) { $Total = 1 }
-    $percent = [math]::Round(($Current / $Total) * 100)
-    $barWidth = 30
-    $filled = [math]::Round(($Current / $Total) * $barWidth)
-    if ($filled -gt $barWidth) { $filled = $barWidth }
-    $empty = $barWidth - $filled
-    $bar = ("#" * $filled) + ("-" * $empty)
-
-    $maxWidth = (Get-ConsoleWidth) - 5
-    $overhead = $barWidth + 25
-    $detailMax = [Math]::Max(10, $maxWidth - $overhead)
-    if ($Detail.Length -gt $detailMax) { $Detail = $Detail.Substring(0, $detailMax - 3) + "..." }
-
-    $line = "[{0}] {1,3}% ({2}/{3}) {4} {5}" -f $bar, $percent, $Current, $Total, $Activity, $Detail
-    if ($line.Length -gt $maxWidth) { $line = $line.Substring(0, $maxWidth) }
-    Write-Host "`r$line" -NoNewline -ForegroundColor Cyan
-}
-
-function Show-Spinner {
-    param(
-        [string]$Message = "Processando",
-        [scriptblock]$Condition
-    )
-    $spin = @('|','/','-','\')
-    $i = 0
-    while (& $Condition) {
-        Write-Host "`r$($spin[$i % 4]) $Message..." -NoNewline -ForegroundColor Cyan
-        Start-Sleep -Milliseconds 120
-        $i++
-    }
-    Write-Host "`r$(' ' * ($Message.Length + 15))`r" -NoNewline
 }
 
 function Get-ArtCenter {
@@ -1668,6 +1634,89 @@ function Search-DriverUpdates {
 }
 
 # =============================================================
+# 7. APLICATIVOS
+# =============================================================
+
+function Menu-Aplicativos {
+    do {
+        Draw-Header -Art $ArtApps
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host "              [ 7. APLICATIVOS ]                     " -ForegroundColor Green
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  [1] Reiniciar AnyDesk (Reset de Trial/Limpeza)" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
+        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host " Opcao: " -NoNewline -ForegroundColor Yellow
+        $op = Read-KeyChoice
+        Write-Host $op
+        switch ($op) {
+            "1" { Reset-AnyDesk }
+        }
+    } while ($op -ne "0")
+}
+
+function Reset-AnyDesk {
+    Clear-Host
+    Write-Host "--- REINICIAR ANYDESK (RESET DE ESTADO) ---`n" -ForegroundColor Cyan
+    Write-Host "Isso fechara o AnyDesk, limpara os arquivos de configuracao" -ForegroundColor Yellow
+    Write-Host "e cache (gerando um novo ID) e o iniciara novamente." -ForegroundColor Yellow
+    Write-Host "Recomendado para tentar contornar limites de tempo da versao free." -ForegroundColor Gray
+    Write-Host ""
+
+    $c = Read-Host "Deseja continuar? (S/N)"
+    if ($c -notmatch "^[Ss]$") { return }
+
+    Write-Host "`n[1/5] Parando processos e servico do AnyDesk..." -ForegroundColor Yellow
+    Stop-Service -Name "AnyDesk" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    taskkill /F /IM "AnyDesk.exe" 2>$null | Out-Null
+    Start-Sleep -Milliseconds 500
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "[2/5] Limpando pasta ProgramData..." -ForegroundColor Yellow
+    $programDataPath = "$env:ProgramData\AnyDesk"
+    if (Test-Path $programDataPath) {
+        Remove-Item -Path "$programDataPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "      -> Conteudo de $programDataPath removido." -ForegroundColor Gray
+    } else {
+        Write-Host "      -> Pasta nao encontrada (nada a limpar)." -ForegroundColor Gray
+    }
+
+    Write-Host "[3/5] Limpando pasta AppData (Roaming)..." -ForegroundColor Yellow
+    $appDataPath = "$env:APPDATA\AnyDesk"
+    if (Test-Path $appDataPath) {
+        Remove-Item -Path "$appDataPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "      -> Conteudo de $appDataPath removido." -ForegroundColor Gray
+    } else {
+        Write-Host "      -> Pasta nao encontrada (nada a limpar)." -ForegroundColor Gray
+    }
+
+    Write-Host "[4/5] Limpando chaves de registro..." -ForegroundColor Yellow
+    reg delete "HKCU\Software\AnyDesk" /f 2>$null | Out-Null
+    reg delete "HKLM\Software\AnyDesk" /f 2>$null | Out-Null
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "[5/5] Iniciando o AnyDesk novamente..." -ForegroundColor Yellow
+    $anydeskExe = @(
+        "$env:ProgramFiles\AnyDesk\AnyDesk.exe",
+        "${env:ProgramFiles(x86)}\AnyDesk\AnyDesk.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($anydeskExe) {
+        Start-Process -FilePath $anydeskExe
+        Write-Host "      [OK] AnyDesk iniciado." -ForegroundColor Green
+        Write-Host "`n[SUCESSO] O AnyDesk foi reiniciado. Verifique o novo ID na janela." -ForegroundColor Green
+    } else {
+        Write-Host "      [AVISO] Executavel do AnyDesk nao encontrado nos caminhos padrao." -ForegroundColor Yellow
+        Write-Host "      Inicie o programa manualmente." -ForegroundColor Yellow
+    }
+
+    Read-Host "`nPressione Enter para continuar"
+}
+
+# =============================================================
 # LOOP PRINCIPAL (com try/catch global)
 # =============================================================
 
@@ -1676,19 +1725,20 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.5           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.6           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  [1] REDE        (Ping, IP, Release/Renew, DNS, SMB)" -ForegroundColor White
         Write-Host "  [2] REPARO      (SFC, DISM, Processos, Temp, CHKDSK)" -ForegroundColor White
         Write-Host "  [3] SISTEMA     (Info, Agendador, Chaves, MAS, AppData)" -ForegroundColor White
         Write-Host "  [4] ARQUIVOS    (Backup Robocopy, Espaco em disco)" -ForegroundColor White
-        Write-Host "  [5] IMPRESSORAS (Listagem, Spooler, Backup/Restore)" -ForegroundColor White
+        Write-Host "  [5] IMPRESSORAS (Listagem, Spooler, Backup/Restore, 0x11b)" -ForegroundColor White
         Write-Host "  [6] DRIVERS     (Backup, Restauracao, Windows Update)" -ForegroundColor White
+        Write-Host "  [7] APLICATIVOS (Reset AnyDesk)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Sair do Programa (ou pressione ESC)" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host " Escolha uma categoria (1-6): " -NoNewline -ForegroundColor Yellow
+        Write-Host " Escolha uma categoria (1-7): " -NoNewline -ForegroundColor Yellow
 
         $choice = Read-KeyChoice
         Write-Host $choice
@@ -1700,6 +1750,7 @@ try {
             "4" { Menu-Arquivos }
             "5" { Menu-Impressoras }
             "6" { Menu-Drivers }
+            "7" { Menu-Aplicativos }
             "0" { Write-Host "`nSaindo..." -ForegroundColor Green }
             default { Write-Host "`nOpcao invalida!" -ForegroundColor Red; Start-Sleep -Milliseconds 800 }
         }
