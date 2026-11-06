@@ -1188,6 +1188,7 @@ function Menu-Impressoras {
         Write-Host "  [2] Remover Impressora Instalada" -ForegroundColor White
         Write-Host "  [3] Backup de Configuracoes de Impressoras" -ForegroundColor White
         Write-Host "  [4] Restaurar Configuracoes de Impressoras" -ForegroundColor White
+        Write-Host "  [5] Corrigir Erro 0x0000011b (Impressora Compartilhada)" -ForegroundColor White
         Write-Host "  [0] Voltar" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host " Opcao: " -NoNewline -ForegroundColor Yellow
@@ -1198,6 +1199,7 @@ function Menu-Impressoras {
             "2" { Remover-Impressora -PrintersList $printers }
             "3" { Backup-Impressoras }
             "4" { Restaurar-Impressoras }
+            "5" { Corrigir-Erro-0x0000011b }
         }
     } while ($op -ne "0")
 }
@@ -1454,6 +1456,25 @@ function Restaurar-Impressoras {
         Write-Host "[ERRO] Falha ao ler o arquivo de backup: $_" -ForegroundColor Red
     }
 
+    Read-Host "`nPressione Enter para continuar"
+}
+
+function Corrigir-Erro-0x0000011b {
+    Clear-Host
+    Write-Host "--- CORRECAO DO ERRO 0x0000011B (IMPRESSORAS COMPARTILHADAS) ---`n" -ForegroundColor Cyan
+    Write-Host "Aplica o ajuste RpcAuthnLevelPrivacyEnabled = 0 no registro." -ForegroundColor Yellow
+    Write-Host "Recomendado APENAS em redes confiaveis." -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Host "[1/2] Aplicando ajuste no registro..." -ForegroundColor Yellow
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Print" /v RpcAuthnLevelPrivacyEnabled /t REG_DWORD /d 0 /f | Out-Null
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "[2/2] Reiniciando o Spooler de Impressao..." -ForegroundColor Yellow
+    Restart-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
+    Write-Host "      [OK]" -ForegroundColor Green
+
+    Write-Host "`n[SUCESSO] Correcao aplicada. Tente conectar a impressora novamente." -ForegroundColor Green
     Read-Host "`nPressione Enter para continuar"
 }
 
