@@ -1,6 +1,6 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.6
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.7
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
@@ -15,7 +15,7 @@ exit /b
 .SYNOPSIS
     Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras, Drivers e Aplicativos.
 .DESCRIPTION
-    Versao 4.6 - Menu de Aplicativos adicionado (Reset AnyDesk).
+    Versao 4.7 - Correcao completa de impressora compartilhada (0x0000011B).
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -1159,7 +1159,7 @@ function Menu-Impressoras {
         Write-Host "  [2] Remover Impressora Instalada" -ForegroundColor White
         Write-Host "  [3] Backup de Configuracoes de Impressoras" -ForegroundColor White
         Write-Host "  [4] Restaurar Configuracoes de Impressoras" -ForegroundColor White
-        Write-Host "  [5] Corrigir Erro 0x0000011b (Impressora Compartilhada)" -ForegroundColor White
+        Write-Host "  [5] Correcao Completa de Impressora Compartilhada (0x0000011b)" -ForegroundColor White
         Write-Host "  [0] Voltar" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host " Opcao: " -NoNewline -ForegroundColor Yellow
@@ -1432,20 +1432,117 @@ function Restaurar-Impressoras {
 
 function Corrigir-Erro-0x0000011b {
     Clear-Host
-    Write-Host "--- CORRECAO DO ERRO 0x0000011B (IMPRESSORAS COMPARTILHADAS) ---`n" -ForegroundColor Cyan
-    Write-Host "Aplica o ajuste RpcAuthnLevelPrivacyEnabled = 0 no registro." -ForegroundColor Yellow
-    Write-Host "Recomendado APENAS em redes confiaveis." -ForegroundColor Yellow
+    Write-Host "--- CORRECAO COMPLETA DE IMPRESSORA COMPARTILHADA (0x0000011B) ---`n" -ForegroundColor Cyan
+    Write-Host "Aplica as seguintes correcoes:" -ForegroundColor Yellow
+    Write-Host "  [1] PointAndPrint\NoWarningNoElevationOnInstall = 1" -ForegroundColor Gray
+    Write-Host "  [2] PointAndPrint\UpdatePromptSettings = 1" -ForegroundColor Gray
+    Write-Host "  [3] PointAndPrint\RestrictDriverInstallationToAdministrators = 0" -ForegroundColor Gray
+    Write-Host "  [4] Print\RpcAuthnLevelPrivacyEnabled = 0" -ForegroundColor Gray
+    Write-Host "  [5] Firewall: Habilita 'File and Printer Sharing'" -ForegroundColor Gray
+    Write-Host "  [6] Reinicia o Spooler de Impressao" -ForegroundColor Gray
+    Write-Host "`n[ATENCAO] Isso reduz restricoes de seguranca do Windows." -ForegroundColor Red
+    Write-Host "          Aplique APENAS em redes confiaveis/fechadas." -ForegroundColor Red
     Write-Host ""
 
-    Write-Host "[1/2] Aplicando ajuste no registro..." -ForegroundColor Yellow
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Print" /v RpcAuthnLevelPrivacyEnabled /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "      [OK]" -ForegroundColor Green
+    $c = Read-Host "Deseja aplicar as correcoes agora? (S/N)"
+    if ($c -notmatch "^[Ss]$") { return }
 
-    Write-Host "[2/2] Reiniciando o Spooler de Impressao..." -ForegroundColor Yellow
-    Restart-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
-    Write-Host "      [OK]" -ForegroundColor Green
+    $erros = @()
 
-    Write-Host "`n[SUCESSO] Correcao aplicada. Tente conectar a impressora novamente." -ForegroundColor Green
+    # ---- 1 a 4: Ajustes de registro ----
+    $regConfigs = @(
+        @{ Path = "HKLM:\Software\Policies\Microsoft\Windows NT\Printers\PointAndPrint"; Name = "NoWarningNoElevationOnInstall";           Value = 1 }
+        @{ Path = "HKLM:\Software\Policies\Microsoft\Windows NT\Printers\PointAndPrint"; Name = "UpdatePromptSettings";                    Value = 1 }
+        @{ Path = "HKLM:\Software\Policies\Microsoft\Windows NT\Printers\PointAndPrint"; Name = "RestrictDriverInstallationToAdministrators"; Value = 0 }
+        @{ Path = "HKLM:\System\CurrentControlSet\Control\Print";                        Name = "RpcAuthnLevelPrivacyEnabled";             Value = 0 }
+    )
+
+    $totalPassos = $regConfigs.Count + 2
+    $passo = 1
+
+    foreach ($cfg in $regConfigs) {
+        Write-Host ("[{0}/{1}] Aplicando {2}..." -f $passo, $totalPassos, $cfg.Name) -ForegroundColor Yellow
+        try {
+            if (-not (Test-Path $cfg.Path)) {
+                New-Item -Path $cfg.Path -Force -ErrorAction Stop | Out-Null
+            }
+            Set-ItemProperty -Path $cfg.Path -Name $cfg.Name -Value $cfg.Value -Type DWord -Force -ErrorAction Stop
+            Write-Host "      [OK] $($cfg.Name) = $($cfg.Value)" -ForegroundColor Green
+        } catch {
+            Write-Host "      [ERRO] $($_.Exception.Message)" -ForegroundColor Red
+            $erros += "$($cfg.Name): $($_.Exception.Message)"
+        }
+        $passo++
+    }
+
+    # ---- 5: Firewall - File and Printer Sharing ----
+    Write-Host ("[{0}/{1}] Habilitando compartilhamento de arquivos e impressoras no firewall..." -f $passo, $totalPassos) -ForegroundColor Yellow
+    try {
+        $fwOut = netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes 2>&1 | Out-String
+        $fwTrim = $fwOut.Trim()
+        if ($fwOut -match "(?i)updated|atualizad|\bOk\b") {
+            Write-Host "      [OK] Regras de firewall atualizadas." -ForegroundColor Green
+        } elseif ([string]::IsNullOrWhiteSpace($fwTrim)) {
+            Write-Host "      [OK] Regras aplicadas (sem mensagem de retorno)." -ForegroundColor Green
+        } else {
+            Write-Host "      [AVISO] Saida do netsh: $fwTrim" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "      [ERRO] Falha ao configurar firewall: $_" -ForegroundColor Red
+        $erros += "Firewall: $_"
+    }
+    $passo++
+
+    # ---- 6: Spooler (stop -> kill se preciso -> start) ----
+    Write-Host ("[{0}/{1}] Reiniciando o Spooler de Impressao..." -f $passo, $totalPassos) -ForegroundColor Yellow
+    try {
+        Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 800
+        $srv = Get-Service -Name "Spooler" -ErrorAction SilentlyContinue
+        if ($srv.Status -ne 'Stopped') {
+            taskkill /F /IM spoolsv.exe 2>$null | Out-Null
+            Start-Sleep -Milliseconds 800
+        }
+        Start-Service -Name "Spooler" -ErrorAction Stop
+        Start-Sleep -Milliseconds 500
+        $srvFinal = Get-Service -Name "Spooler" -ErrorAction SilentlyContinue
+        if ($srvFinal.Status -eq 'Running') {
+            Write-Host "      [OK] Spooler em execucao." -ForegroundColor Green
+        } else {
+            Write-Host "      [AVISO] Status do Spooler: $($srvFinal.Status)" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "      [ERRO] Falha ao reiniciar o Spooler: $_" -ForegroundColor Red
+        $erros += "Spooler: $_"
+    }
+
+    # ---- Verificacao final ----
+    Write-Host "`n--- VERIFICACAO DOS VALORES APLICADOS ---" -ForegroundColor Cyan
+    foreach ($cfg in $regConfigs) {
+        try {
+            $val = (Get-ItemProperty -Path $cfg.Path -Name $cfg.Name -ErrorAction SilentlyContinue).$($cfg.Name)
+            if ($null -eq $val) {
+                Write-Host ("  {0,-45} : NAO ENCONTRADO" -f $cfg.Name) -ForegroundColor Red
+            } elseif ($val -eq $cfg.Value) {
+                Write-Host ("  {0,-45} : {1} [OK]" -f $cfg.Name, $val) -ForegroundColor Green
+            } else {
+                Write-Host ("  {0,-45} : {1} [DIVERGENTE - esperado {2}]" -f $cfg.Name, $val, $cfg.Value) -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host ("  {0,-45} : ERRO ao ler" -f $cfg.Name) -ForegroundColor Red
+        }
+    }
+
+    if ($erros.Count -eq 0) {
+        Write-Host "`n[SUCESSO] Todas as correcoes foram aplicadas!" -ForegroundColor Green
+        Write-Host "[INFO] Tente conectar a impressora compartilhada novamente." -ForegroundColor Cyan
+        Write-Host "[INFO] Se o erro persistir, reinicie o computador e repita." -ForegroundColor Yellow
+    } else {
+        Write-Host "`n[AVISO] Algumas correcoes falharam:" -ForegroundColor Yellow
+        foreach ($e in $erros) { Write-Host "  - $e" -ForegroundColor Red }
+        Write-Host "[INFO] Verifique se esta executando como Administrador." -ForegroundColor Yellow
+    }
+
     Read-Host "`nPressione Enter para continuar"
 }
 
@@ -1730,14 +1827,14 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.6           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.7           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  [1] REDE        (Ping, IP, Release/Renew, DNS, SMB)" -ForegroundColor White
         Write-Host "  [2] REPARO      (SFC, DISM, Processos, Temp, CHKDSK)" -ForegroundColor White
         Write-Host "  [3] SISTEMA     (Info, Agendador, Chaves, MAS, AppData)" -ForegroundColor White
         Write-Host "  [4] ARQUIVOS    (Backup Robocopy, Espaco em disco)" -ForegroundColor White
-        Write-Host "  [5] IMPRESSORAS (Listagem, Spooler, Backup/Restore, 0x11b)" -ForegroundColor White
+        Write-Host "  [5] IMPRESSORAS (Spooler, Backup/Restore, Fix 0x11b Completo)" -ForegroundColor White
         Write-Host "  [6] DRIVERS     (Backup, Restauracao, Windows Update)" -ForegroundColor White
         Write-Host "  [7] APLICATIVOS (Reset AnyDesk)" -ForegroundColor White
         Write-Host ""
