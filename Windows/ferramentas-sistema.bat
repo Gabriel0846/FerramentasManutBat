@@ -1,6 +1,6 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.8
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.9
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
@@ -15,7 +15,7 @@ exit /b
 .SYNOPSIS
     Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras, Drivers e Aplicativos.
 .DESCRIPTION
-    Versao 4.8 - Adicionada funcao de remocao de licenca do Windows.
+    Versao 4.9 - Correcoes de compatibilidade com Windows 7 (Info Sistema + Backup/Restore Drivers).
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -229,6 +229,15 @@ function Parse-SelecaoIndices {
         }
     }
     return ($result | Sort-Object -Unique)
+}
+
+function Convert-WmiDate {
+    param($WmiDate)
+    if (-not $WmiDate) { return $null }
+    try {
+        if ($WmiDate -is [datetime]) { return $WmiDate }
+        return [System.Management.ManagementDateTimeConverter]::ToDateTime([string]$WmiDate)
+    } catch { return $null }
 }
 
 # =============================================================
@@ -512,15 +521,35 @@ function Menu-Sistema {
 function Informacoes-Sistema {
     Clear-Host
     Write-Host "--- INFORMACOES DO SISTEMA ---`n" -ForegroundColor Cyan
-    $os = Get-CimInstance Win32_OperatingSystem
-    $installDate = $os.InstallDate.ToString("dd/MM/yyyy HH:mm:ss")
-    $uptime = (Get-Date) - $os.LastBootUpTime
-    $uptimeStr = "{0}d {1}h {2}m" -f $uptime.Days, $uptime.Hours, $uptime.Minutes
-    $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-    $ramGB = [math]::Round((Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum / 1GB, 2)
-    $mb = Get-CimInstance Win32_BaseBoard
-    $gpu = Get-CimInstance Win32_VideoController | Select-Object -First 1
-    $nets = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True"
+
+    try {
+        $os = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+    } catch {
+        Write-Host "[ERRO] Nao foi possivel obter informacoes do SO: $_" -ForegroundColor Red
+        Read-Host "Pressione Enter"
+        return
+    }
+
+    $installDate = "N/A"
+    $dt = Convert-WmiDate $os.InstallDate
+    if ($dt) { $installDate = $dt.ToString("dd/MM/yyyy HH:mm:ss") }
+
+    $uptimeStr = "N/A"
+    $boot = Convert-WmiDate $os.LastBootUpTime
+    if ($boot) {
+        $uptime = (Get-Date) - $boot
+        $uptimeStr = "{0}d {1}h {2}m" -f $uptime.Days, $uptime.Hours, $uptime.Minutes
+    }
+
+    $cpu = $null; $ramGB = 0; $mb = $null; $gpu = $null; $nets = $null
+    try { $cpu  = Get-WmiObject Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1 } catch {}
+    try {
+        $ramBytes = (Get-WmiObject Win32_PhysicalMemory -ErrorAction SilentlyContinue | Measure-Object -Property Capacity -Sum).Sum
+        if ($ramBytes) { $ramGB = [math]::Round($ramBytes / 1GB, 2) }
+    } catch {}
+    try { $mb   = Get-WmiObject Win32_BaseBoard -ErrorAction SilentlyContinue } catch {}
+    try { $gpu  = Get-WmiObject Win32_VideoController -ErrorAction SilentlyContinue | Select-Object -First 1 } catch {}
+    try { $nets = Get-WmiObject Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True" -ErrorAction SilentlyContinue } catch {}
 
     Write-Host "SISTEMA OPERACIONAL" -ForegroundColor Yellow
     Write-Host "  Nome/Edicao    : $($os.Caption)" -ForegroundColor White
@@ -530,15 +559,18 @@ function Informacoes-Sistema {
     Write-Host "  Uptime         : $uptimeStr" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "HARDWARE PRINCIPAL" -ForegroundColor Yellow
-    Write-Host "  Processador    : $($cpu.Name.Trim())" -ForegroundColor White
+    $cpuName = if ($cpu -and $cpu.Name) { $cpu.Name.Trim() } else { "N/A" }
+    Write-Host "  Processador    : $cpuName" -ForegroundColor White
     Write-Host "  Memoria RAM    : $ramGB GB" -ForegroundColor White
-    Write-Host "  Placa-Mae      : $($mb.Manufacturer) - $($mb.Product)" -ForegroundColor White
-    Write-Host "  Placa de Video : $($gpu.Name)" -ForegroundColor White
+    $mbStr = if ($mb) { "$($mb.Manufacturer) - $($mb.Product)" } else { "N/A" }
+    Write-Host "  Placa-Mae      : $mbStr" -ForegroundColor White
+    $gpuName = if ($gpu) { $gpu.Name } else { "N/A" }
+    Write-Host "  Placa de Video : $gpuName" -ForegroundColor White
     Write-Host ""
     Write-Host "REDE E CONECTIVIDADE" -ForegroundColor Yellow
-    if ($nets) {
+    if ($nets -and $nets.Count -gt 0) {
         foreach ($net in $nets) {
-            $ipAddr = if ($net.IPAddress) { $net.IPAddress[0] } else { "N/A" }
+            $ipAddr = if ($net.IPAddress -and $net.IPAddress.Count -gt 0) { $net.IPAddress[0] } else { "N/A" }
             Write-Host "  Adaptador      : $($net.Description)" -ForegroundColor White
             Write-Host "    IP           : $ipAddr" -ForegroundColor Gray
             Write-Host "    MAC          : $($net.MACAddress)" -ForegroundColor Gray
@@ -592,7 +624,7 @@ function Get-WindowsKey {
     Clear-Host
     Write-Host "--- DIAGNOSTICO DE LICENCA DO WINDOWS ---`n" -ForegroundColor Cyan
 
-    $osInfo = Get-CimInstance Win32_OperatingSystem
+    $osInfo = Get-WmiObject Win32_OperatingSystem
     Write-Host "Edicao : $($osInfo.Caption)" -ForegroundColor White
     Write-Host "Build  : $($osInfo.Version) ($($osInfo.BuildNumber))" -ForegroundColor Gray
     Write-Host "-----------------------------------------------------------------" -ForegroundColor Gray
@@ -600,7 +632,7 @@ function Get-WindowsKey {
     $foundAny = $false
 
     try {
-        $biosKey = (Get-CimInstance -Query 'select OA3xOriginalProductKey from SoftwareLicensingService').OA3xOriginalProductKey
+        $biosKey = (Get-WmiObject -Query 'select OA3xOriginalProductKey from SoftwareLicensingService').OA3xOriginalProductKey
         if ($biosKey -and $biosKey.Trim() -ne "") {
             $foundAny = $true
             Write-Host "`n[1] CHAVE OEM (BIOS/UEFI)" -ForegroundColor Green
@@ -610,7 +642,7 @@ function Get-WindowsKey {
     } catch {}
 
     try {
-        $digitalLic = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" |
+        $digitalLic = Get-WmiObject SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND Name LIKE 'Windows%'" |
                       Where-Object { $_.ApplicationId -eq '55c9273a-2b2c-4032-9916-e0625a639257' } |
                       Select-Object -First 1
         if ($digitalLic) {
@@ -935,7 +967,7 @@ function Backup-AppData {
     Write-Host "Copia Roaming, LocalLow e Local de cada usuario selecionado." -ForegroundColor Gray
     Write-Host "Arquivos em uso serao pulados e listados no final.`n" -ForegroundColor Gray
 
-    $profiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+    $profiles = Get-WmiObject Win32_UserProfile -ErrorAction SilentlyContinue |
         Where-Object {
             -not $_.Special -and
             $_.LocalPath -and
@@ -1017,7 +1049,7 @@ function Backup-AppData {
         $tamanhoBytes = 0
         $numArquivos = 0
         if (Test-Path $dstAppData) {
-            $arquivos = Get-ChildItem $dstAppData -Recurse -Force -File -ErrorAction SilentlyContinue
+            $arquivos = Get-ChildItem $dstAppData -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer }
             $numArquivos = $arquivos.Count
             $soma = ($arquivos | Measure-Object -Property Length -Sum).Sum
             if ($soma) { $tamanhoBytes = $soma }
@@ -1063,7 +1095,7 @@ function Backup-AppData {
 }
 
 # =============================================================
-# 3.9 REMOVER LICENCA DO WINDOWS (NOVA FUNCAO)
+# 3.9 REMOVER LICENCA DO WINDOWS
 # =============================================================
 
 function Remover-Licenca-Windows {
@@ -1078,11 +1110,14 @@ function Remover-Licenca-Windows {
     Write-Host "          Voce precisara reativar depois com uma chave valida." -ForegroundColor Red
     Write-Host ""
 
-    # --- Diagnostico inicial ---
     Write-Host "--- ESTADO ATUAL ---" -ForegroundColor Cyan
-    $osInfo = Get-CimInstance Win32_OperatingSystem
-    Write-Host "  Edicao : $($osInfo.Caption)" -ForegroundColor White
-    Write-Host "  Build  : $($osInfo.Version) ($($osInfo.BuildNumber))" -ForegroundColor Gray
+    try {
+        $osInfo = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+        Write-Host "  Edicao : $($osInfo.Caption)" -ForegroundColor White
+        Write-Host "  Build  : $($osInfo.Version) ($($osInfo.BuildNumber))" -ForegroundColor Gray
+    } catch {
+        Write-Host "  [AVISO] Nao foi possivel obter dados do SO." -ForegroundColor Yellow
+    }
     try {
         $dliAtual = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /dli 2>&1 | Out-String
         Write-Host $dliAtual.Trim() -ForegroundColor Gray
@@ -1095,7 +1130,6 @@ function Remover-Licenca-Windows {
         return
     }
 
-    # --- Passo 1: upk ---
     Write-Host "`n[1/3] Desinstalando a chave de produto (slmgr /upk)..." -ForegroundColor Yellow
     try {
         $upk = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /upk 2>&1 | Out-String
@@ -1109,7 +1143,6 @@ function Remover-Licenca-Windows {
         Write-Host "      [ERRO] Falha ao desinstalar chave: $_" -ForegroundColor Red
     }
 
-    # --- Passo 2: cpky ---
     Write-Host "`n[2/3] Limpando a chave do registro (slmgr /cpky)..." -ForegroundColor Yellow
     try {
         $cpky = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /cpky 2>&1 | Out-String
@@ -1123,7 +1156,6 @@ function Remover-Licenca-Windows {
         Write-Host "      [ERRO] Falha ao limpar registro: $_" -ForegroundColor Red
     }
 
-    # --- Passo 3: rearm ---
     Write-Host "`n[3/3] Resetando o estado de ativacao (slmgr /rearm)..." -ForegroundColor Yellow
     try {
         $rearm = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /rearm 2>&1 | Out-String
@@ -1137,7 +1169,6 @@ function Remover-Licenca-Windows {
         Write-Host "      [ERRO] Falha ao resetar estado: $_" -ForegroundColor Red
     }
 
-    # --- Verificacao final ---
     Write-Host "`n--- VERIFICACAO FINAL ---" -ForegroundColor Cyan
     try {
         $dli = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /dli 2>&1 | Out-String
@@ -1240,7 +1271,7 @@ function Menu-Impressoras {
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "IMPRESSORAS INSTALADAS:" -ForegroundColor Yellow
-        $printers = Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue
+        $printers = Get-WmiObject Win32_Printer -ErrorAction SilentlyContinue
         if ($printers) {
             for ($i = 0; $i -lt $printers.Count; $i++) {
                 $p = $printers[$i]
@@ -1333,7 +1364,7 @@ function Remover-Impressora {
     if ($idx -match '^\d+$' -and [int]$idx -gt 0 -and [int]$idx -le $PrintersList.Count) {
         $target = $PrintersList[[int]$idx - 1]
         try {
-            Remove-CimInstance -InputObject $target -ErrorAction Stop
+            $target.Delete()
             Write-Host "[SUCESSO] '$($target.Name)' removida." -ForegroundColor Green
         } catch { Write-Host "[ERRO] $_" -ForegroundColor Red }
     } else {
@@ -1372,7 +1403,21 @@ function Backup-Impressoras {
     try {
         Write-Host "`nColetando informacoes das impressoras..." -ForegroundColor Yellow
 
-        $printers = Get-Printer -ErrorAction Stop | Select-Object Name, DriverName, PortName, Shared, ShareName, Published, Location, Comment, Type
+        $wmiPrinters = Get-WmiObject Win32_Printer -ErrorAction Stop
+        $printers = @()
+        foreach ($wp in $wmiPrinters) {
+            $printers += [PSCustomObject]@{
+                Name       = $wp.Name
+                DriverName = $wp.DriverName
+                PortName   = $wp.PortName
+                Shared     = [bool]$wp.Shared
+                ShareName  = $wp.ShareName
+                Published  = [bool]$wp.Published
+                Location   = $wp.Location
+                Comment    = $wp.Comment
+                Type       = $wp.PrinterStatus
+            }
+        }
 
         if ($printers.Count -eq 0) {
             Write-Host "[AVISO] Nenhuma impressora encontrada para fazer backup." -ForegroundColor Yellow
@@ -1445,9 +1490,12 @@ function Restaurar-Impressoras {
         foreach ($p in $printers) {
             Write-Host "`nProcessando: $($p.Name)" -ForegroundColor White
             try {
-                $porta = Get-PrinterPort -Name $p.PortName -ErrorAction SilentlyContinue
+                $porta = Get-WmiObject Win32_TCPIPPrinterPort -Filter "Name='$($p.PortName)'" -ErrorAction SilentlyContinue
+                if (-not $porta -and $p.PortName -match '^(COM|LPT|USB|FILE)' ) {
+                    $porta = "ok"
+                }
                 if (-not $porta) {
-                    Write-Host "  - Criando porta '$($p.PortName)'..." -ForegroundColor Gray
+                    Write-Host "  - Criando porta TCP/IP '$($p.PortName)'..." -ForegroundColor Gray
                     try {
                         Add-PrinterPort -Name $p.PortName -ErrorAction Stop
                         Write-Host "  - Porta criada." -ForegroundColor Gray
@@ -1462,17 +1510,17 @@ function Restaurar-Impressoras {
 
                 $driverOk = $true
                 try {
-                    $drv = Get-PrinterDriver -Name $p.DriverName -ErrorAction SilentlyContinue
+                    $drv = Get-WmiObject Win32_PrinterDriver -Filter "Name LIKE '%$($p.DriverName)%'" -ErrorAction SilentlyContinue
                     if (-not $drv) {
                         Write-Host "  [AVISO] Driver '$($p.DriverName)' nao esta instalado." -ForegroundColor Yellow
                         $driverOk = $false
                     }
                 } catch { }
 
-                $printerExiste = Get-Printer -Name $p.Name -ErrorAction SilentlyContinue
+                $printerExiste = Get-WmiObject Win32_Printer -Filter "Name='$($p.Name.Replace("'","''"))'" -ErrorAction SilentlyContinue
                 if ($printerExiste) {
                     Write-Host "  - Impressora ja existe. Removendo para recriar..." -ForegroundColor Yellow
-                    Remove-Printer -Name $p.Name -ErrorAction SilentlyContinue
+                    $printerExiste.Delete()
                     Start-Sleep -Milliseconds 400
                 }
 
@@ -1546,7 +1594,6 @@ function Corrigir-Erro-0x0000011b {
 
     $erros = @()
 
-    # ---- 1 a 4: Ajustes de registro ----
     $regConfigs = @(
         @{ Path = "HKLM:\Software\Policies\Microsoft\Windows NT\Printers\PointAndPrint"; Name = "NoWarningNoElevationOnInstall";           Value = 1 }
         @{ Path = "HKLM:\Software\Policies\Microsoft\Windows NT\Printers\PointAndPrint"; Name = "UpdatePromptSettings";                    Value = 1 }
@@ -1572,7 +1619,6 @@ function Corrigir-Erro-0x0000011b {
         $passo++
     }
 
-    # ---- 5: Firewall - File and Printer Sharing ----
     Write-Host ("[{0}/{1}] Habilitando compartilhamento de arquivos e impressoras no firewall..." -f $passo, $totalPassos) -ForegroundColor Yellow
     try {
         $fwOut = netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes 2>&1 | Out-String
@@ -1590,7 +1636,6 @@ function Corrigir-Erro-0x0000011b {
     }
     $passo++
 
-    # ---- 6: Spooler (stop -> kill se preciso -> start) ----
     Write-Host ("[{0}/{1}] Reiniciando o Spooler de Impressao..." -f $passo, $totalPassos) -ForegroundColor Yellow
     try {
         Stop-Service -Name "Spooler" -Force -ErrorAction SilentlyContinue
@@ -1613,7 +1658,6 @@ function Corrigir-Erro-0x0000011b {
         $erros += "Spooler: $_"
     }
 
-    # ---- Verificacao final ----
     Write-Host "`n--- VERIFICACAO DOS VALORES APLICADOS ---" -ForegroundColor Cyan
     foreach ($cfg in $regConfigs) {
         try {
@@ -1679,36 +1723,129 @@ function Backup-Drivers {
     Write-Host "Destino: $backupPath" -ForegroundColor Cyan
 
     if (-not (Test-Path $backupPath)) {
+        try { New-Item -ItemType Directory -Path $backupPath -Force | Out-Null }
+        catch { Write-Host "[ERRO] Nao foi possivel criar a pasta: $_" -ForegroundColor Red; Read-Host; return }
+    }
+
+    $isLegacy = $false
+    try { if ([Environment]::OSVersion.Version.Major -lt 10) { $isLegacy = $true } } catch {}
+
+    if (-not $isLegacy) {
+        # ---------- Windows 10/11 ----------
+        Write-Host "`nExportando drivers (metodo moderno)..." -ForegroundColor Yellow
         try {
-            New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
-        } catch {
-            Write-Host "[ERRO] Nao foi possivel criar a pasta: $_" -ForegroundColor Red
-            Read-Host "Pressione Enter para continuar"
-            return
+            $proc = Start-Process pnputil -ArgumentList "/export-driver * `"$backupPath`"" -NoNewWindow -PassThru
+            while (-not $proc.HasExited) {
+                Write-Host "`r$('|/-\'[(Get-Random -Max 4)]) Exportando..." -NoNewline -ForegroundColor Cyan
+                Start-Sleep -Milliseconds 120
+            }
+            $proc.WaitForExit()
+            Write-Host "`r$(' ' * 60)`r" -NoNewline
+        } catch { Write-Host "[AVISO] pnputil: $_" -ForegroundColor Yellow }
+
+        try { dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Null } catch {}
+    }
+    else {
+        # ---------- Windows 7 (e anteriores) ----------
+        Write-Host "`n[INFO] Windows 7 detectado - usando metodo compativel..." -ForegroundColor Yellow
+        Write-Host "       (pnputil /export-driver e dism /export-driver nao existem aqui)`n" -ForegroundColor Gray
+
+        Write-Host "[1/3] Enumerando drivers de terceiros (pnputil -e)..." -ForegroundColor Yellow
+        $enum = ""
+        try { $enum = pnputil -e 2>&1 | Out-String } catch {}
+
+        $publishedNames = @()
+        if ($enum) {
+            foreach ($m in [regex]::Matches($enum, '(?:Published Name|Nome publicado|Nombre publicado):\s*(oem\d+\.inf)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                $publishedNames += $m.Groups[1].Value
+            }
+        }
+
+        if ($publishedNames.Count -eq 0) {
+            Write-Host "      [AVISO] Nenhum driver third-party listado." -ForegroundColor Yellow
+            Write-Host "      Copiando FileRepository completo (pode ser grande)..." -ForegroundColor Yellow
+            $repoSrc = "$env:SystemRoot\System32\DriverStore\FileRepository"
+            $repoDst = Join-Path $backupPath "FileRepository"
+            if (Test-Path $repoSrc) {
+                robocopy $repoSrc $repoDst /E /R:1 /W:1 /NP /NFL /NDL | Out-Null
+                Write-Host "      [OK] Copia concluida." -ForegroundColor Green
+            }
+        }
+        else {
+            Write-Host "      Encontrados $($publishedNames.Count) driver(s)." -ForegroundColor Cyan
+
+            Write-Host "`n[2/3] Indexando FileRepository por CatalogFile..." -ForegroundColor Yellow
+            $repoPath = "$env:SystemRoot\System32\DriverStore\FileRepository"
+            if (-not (Test-Path $repoPath)) {
+                Write-Host "      [ERRO] FileRepository nao encontrado." -ForegroundColor Red
+                Read-Host; return
+            }
+
+            $catCache = @{}
+            $folders = Get-ChildItem $repoPath -ErrorAction SilentlyContinue | Where-Object { $_.PSIsContainer }
+            foreach ($folder in $folders) {
+                try {
+                    $cats = Get-ChildItem $folder.FullName -Filter "*.cat" -ErrorAction SilentlyContinue
+                    foreach ($cat in $cats) { $catCache[$cat.Name] = $folder.FullName }
+                } catch {}
+            }
+            Write-Host "      Indexados $($catCache.Count) catalogo(s)." -ForegroundColor Gray
+
+            Write-Host "`n[3/3] Copiando drivers..." -ForegroundColor Yellow
+            $copiados = 0; $ignorados = 0
+
+            foreach ($oem in $publishedNames) {
+                $infSrc = Join-Path "$env:SystemRoot\INF" $oem
+                if (-not (Test-Path $infSrc)) {
+                    Write-Host "  [SKIP] $oem (inf ausente)" -ForegroundColor DarkGray
+                    $ignorados++; continue
+                }
+
+                $catName = $null
+                try {
+                    $content = Get-Content $infSrc -Raw -ErrorAction SilentlyContinue
+                    if ($content -match '(?im)^\s*CatalogFile\s*=\s*"?([^"\r\n]+\.cat)"?') {
+                        $catName = $matches[1].Trim()
+                    }
+                } catch {}
+
+                $srcFolder = if ($catName) { $catCache[$catName] } else { $null }
+                if (-not $srcFolder) {
+                    Write-Host "  [SKIP] $oem (pasta FileRepository nao localizada)" -ForegroundColor DarkGray
+                    $ignorados++; continue
+                }
+
+                $destFolder = Join-Path $backupPath (Split-Path $srcFolder -Leaf)
+                if (Test-Path $destFolder) {
+                    Write-Host "  [JA EXISTE] $oem" -ForegroundColor DarkGray
+                    continue
+                }
+
+                try {
+                    New-Item -ItemType Directory -Path $destFolder -Force | Out-Null
+                    robocopy $srcFolder $destFolder /E /R:1 /W:1 /NP /NFL /NDL | Out-Null
+                    Write-Host "  [OK] $oem -> $(Split-Path $srcFolder -Leaf)" -ForegroundColor Green
+                    $copiados++
+                } catch {
+                    Write-Host "  [ERRO] $oem : $_" -ForegroundColor Red
+                    $ignorados++
+                }
+            }
+            Write-Host "`n[SUCESSO] $copiados copiado(s), $ignorados ignorado(s)." -ForegroundColor Green
         }
     }
 
-    Write-Host "`nExportando drivers de terceiros..." -ForegroundColor Yellow
-
-    $proc = Start-Process pnputil -ArgumentList "/export-driver * `"$backupPath`"" -NoNewWindow -PassThru
-    while (-not $proc.HasExited) {
-        Write-Host "`r$('|/-\'[(Get-Random -Max 4)]) Exportando... (pode demorar)" -NoNewline -ForegroundColor Cyan
-        Start-Sleep -Milliseconds 120
-    }
-    $proc.WaitForExit()
-    Write-Host "`r$(' ' * 60)`r" -NoNewline
-
-    Write-Host "Executando DISM export (redundancia)..." -ForegroundColor Yellow
-    dism /online /export-driver /destination:"$backupPath" 2>&1 | Out-Null
-
     $countInf = (Get-ChildItem $backupPath -Filter "*.inf" -Recurse -ErrorAction SilentlyContinue).Count
-    Write-Host "[SUCESSO] $countInf driver(s) exportado(s) para: $backupPath" -ForegroundColor Green
+    Write-Host "`nTotal de .inf no backup: $countInf" -ForegroundColor Cyan
     Read-Host "`nPressione Enter para continuar"
 }
 
 function Restore-Drivers {
     Clear-Host
     Write-Host "--- RESTAURACAO DE DRIVERS ---`n" -ForegroundColor Cyan
+
+    $isLegacy = $false
+    try { if ([Environment]::OSVersion.Version.Major -lt 10) { $isLegacy = $true } } catch {}
 
     $driverDir = Join-Path $ScriptDir "DRIVER"
     $backupPath = $null
@@ -1763,40 +1900,73 @@ function Restore-Drivers {
         return
     }
 
-    Write-Host "`nInstalando em lote (rapido)..." -ForegroundColor Yellow
-
     $logFile = Join-Path $backupPath "log_erros_drivers.txt"
     if (Test-Path $logFile) { Remove-Item $logFile -Force }
 
-    $tmpOut = Join-Path $env:TEMP "pnputil_out.txt"
-    $proc = Start-Process cmd -ArgumentList "/c pnputil /add-driver `"$backupPath\*.inf`" /subdirs /install > `"$tmpOut`" 2>&1" -NoNewWindow -PassThru
-    while (-not $proc.HasExited) {
-        Write-Host "`r$('|/-\'[(Get-Random -Max 4)]) Instalando drivers em lote..." -NoNewline -ForegroundColor Cyan
-        Start-Sleep -Milliseconds 120
+    $sucesso = 0; $falha = 0
+    $logs = @()
+
+    if (-not $isLegacy) {
+        # ---------- Windows 10/11 ----------
+        Write-Host "`nInstalando em lote (rapido)..." -ForegroundColor Yellow
+
+        $tmpOut = Join-Path $env:TEMP "pnputil_out.txt"
+        $proc = Start-Process cmd -ArgumentList "/c pnputil /add-driver `"$backupPath\*.inf`" /subdirs /install > `"$tmpOut`" 2>&1" -NoNewWindow -PassThru
+        while (-not $proc.HasExited) {
+            Write-Host "`r$('|/-\'[(Get-Random -Max 4)]) Instalando drivers em lote..." -NoNewline -ForegroundColor Cyan
+            Start-Sleep -Milliseconds 120
+        }
+        $proc.WaitForExit()
+        Write-Host "`r$(' ' * 60)`r" -NoNewline
+
+        $output = if (Test-Path $tmpOut) { Get-Content $tmpOut -Raw } else { "" }
+        $sucesso = ([regex]::Matches($output, "successfully added|adicionado com .xito|instalado com sucesso|imported successfully")).Count
+        $falha = ([regex]::Matches($output, "failed to add|falha|error", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)).Count
+
+        if ($sucesso -eq 0 -and $falha -eq 0) {
+            Write-Host "[INFO] pnputil nao reportou contadores individuais." -ForegroundColor Yellow
+            Write-Host "       Total de drivers processados: $($infFiles.Count)" -ForegroundColor White
+        }
+
+        $output | Out-File $logFile -Encoding UTF8
+        if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
     }
-    $proc.WaitForExit()
-    Write-Host "`r$(' ' * 60)`r" -NoNewline
+    else {
+        # ---------- Windows 7: pnputil -i -a por driver ----------
+        Write-Host "`n[INFO] Windows 7 detectado - usando pnputil -i -a por driver..." -ForegroundColor Yellow
+        Write-Host "       (/add-driver /subdirs /install nao existem nesta versao)`n" -ForegroundColor Gray
 
-    $output = if (Test-Path $tmpOut) { Get-Content $tmpOut -Raw } else { "" }
-    $sucesso = ([regex]::Matches($output, "successfully added|adicionado com .xito|instalado com sucesso|imported successfully")).Count
-    $falha = ([regex]::Matches($output, "failed to add|falha|error", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)).Count
-
-    if ($sucesso -eq 0 -and $falha -eq 0) {
-        Write-Host "[INFO] pnputil nao reportou contadores individuais." -ForegroundColor Yellow
-        Write-Host "       Total de drivers processados: $($infFiles.Count)" -ForegroundColor White
-    } else {
-        Write-Host "`n==========================================" -ForegroundColor Cyan
-        Write-Host "          RESUMO DA INSTALACAO           " -ForegroundColor Cyan
-        Write-Host "==========================================" -ForegroundColor Cyan
-        Write-Host " Total processados : $($infFiles.Count)" -ForegroundColor White
-        Write-Host " Com SUCESSO       : $sucesso" -ForegroundColor Green
-        if ($falha -gt 0) { Write-Host " Com FALHA         : $falha" -ForegroundColor Red }
+        $contador = 0
+        foreach ($inf in $infFiles) {
+            $contador++
+            Write-Host "`r[$contador/$($infFiles.Count)] $($inf.Name) ..." -NoNewline -ForegroundColor Cyan
+            try {
+                $out = pnputil -i -a "$($inf.FullName)" 2>&1 | Out-String
+                $logs += "=== $($inf.Name) ==="
+                $logs += $out
+                if ($out -match "successfully added|successfully installed|adicionado com .xito|instalado com sucesso|already exists|ja existe") {
+                    $sucesso++
+                } else {
+                    $falha++
+                }
+            } catch {
+                $falha++
+                $logs += "=== $($inf.Name) === ERRO: $_"
+            }
+        }
+        Write-Host "`r$(' ' * 80)`r" -NoNewline
+        $logs | Out-File $logFile -Encoding UTF8
     }
 
-    $output | Out-File $logFile -Encoding UTF8
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Write-Host "          RESUMO DA INSTALACAO           " -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host " Total processados : $($infFiles.Count)" -ForegroundColor White
+    Write-Host " Com SUCESSO       : $sucesso" -ForegroundColor Green
+    if ($falha -gt 0) { Write-Host " Com FALHA         : $falha" -ForegroundColor Red }
+
     Write-Host "`nLog completo em: $logFile" -ForegroundColor Yellow
     Write-Host "`nRecomenda-se reiniciar o computador." -ForegroundColor Yellow
-    if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
     Read-Host "`nPressione Enter para continuar"
 }
 
@@ -1924,7 +2094,7 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.8           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.9           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  [1] REDE        (Ping, IP, Release/Renew, DNS, SMB)" -ForegroundColor White
