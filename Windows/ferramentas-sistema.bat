@@ -1,6 +1,6 @@
 @echo off
 :: ======================================
-:: LANCADOR INTEGRADO DE FERRAMENTAS v4.7
+:: LANCADOR INTEGRADO DE FERRAMENTAS v4.8
 :: ======================================
 chcp 65001 >nul
 set "SELF_PATH=%~f0"
@@ -15,7 +15,7 @@ exit /b
 .SYNOPSIS
     Ferramentas Unificadas de TI: Rede, Reparo, Sistema, Arquivos, Impressoras, Drivers e Aplicativos.
 .DESCRIPTION
-    Versao 4.7 - Correcao completa de impressora compartilhada (0x0000011B).
+    Versao 4.8 - Adicionada funcao de remocao de licenca do Windows.
 .NOTES
     Autor: Gabriel Lopes
 #>
@@ -40,7 +40,7 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 # =============================================================
-# ARTES ASCII (referencia: canivete suico)
+# ARTES ASCII
 # =============================================================
 
 $ArtMain = @(
@@ -489,6 +489,7 @@ function Menu-Sistema {
         Write-Host "  [5] Diagnostico / Chave do Office" -ForegroundColor White
         Write-Host "  [6] Chutar Chave do Windows (coringa *)" -ForegroundColor White
         Write-Host "  [7] Backup de AppData dos Usuarios" -ForegroundColor White
+        Write-Host "  [8] Remover Licenca do Windows (deixar em branco)" -ForegroundColor White
         Write-Host ""
         Write-Host "  [0] Voltar ao Menu Principal" -ForegroundColor Red
         Write-Host "=====================================================" -ForegroundColor Cyan
@@ -503,6 +504,7 @@ function Menu-Sistema {
             "5" { Get-OfficeKey }
             "6" { Chutar-Chave-Windows }
             "7" { Backup-AppData }
+            "8" { Remover-Licenca-Windows }
         }
     } while ($op -ne "0")
 }
@@ -1057,6 +1059,101 @@ function Backup-AppData {
     }
 
     Write-Host "`nBackup salvo em: $backupRoot" -ForegroundColor Cyan
+    Read-Host "`nPressione Enter para continuar"
+}
+
+# =============================================================
+# 3.9 REMOVER LICENCA DO WINDOWS (NOVA FUNCAO)
+# =============================================================
+
+function Remover-Licenca-Windows {
+    Clear-Host
+    Write-Host "--- REMOVER LICENCA DO WINDOWS ---`n" -ForegroundColor Cyan
+    Write-Host "Esta funcao executara:" -ForegroundColor Yellow
+    Write-Host "  [1] slmgr /upk   -> Desinstala a chave de produto atual" -ForegroundColor Gray
+    Write-Host "  [2] slmgr /cpky  -> Limpa a chave do registro" -ForegroundColor Gray
+    Write-Host "  [3] slmgr /rearm -> Reseta o estado de ativacao" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "[ATENCAO] Apos isso o Windows ficara SEM LICENCA (nao ativado)." -ForegroundColor Red
+    Write-Host "          Voce precisara reativar depois com uma chave valida." -ForegroundColor Red
+    Write-Host ""
+
+    # --- Diagnostico inicial ---
+    Write-Host "--- ESTADO ATUAL ---" -ForegroundColor Cyan
+    $osInfo = Get-CimInstance Win32_OperatingSystem
+    Write-Host "  Edicao : $($osInfo.Caption)" -ForegroundColor White
+    Write-Host "  Build  : $($osInfo.Version) ($($osInfo.BuildNumber))" -ForegroundColor Gray
+    try {
+        $dliAtual = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /dli 2>&1 | Out-String
+        Write-Host $dliAtual.Trim() -ForegroundColor Gray
+    } catch {}
+
+    $c = Read-Host "`nDeseja realmente remover a licenca do Windows? (S/N)"
+    if ($c -notmatch "^[Ss]$") {
+        Write-Host "Operacao cancelada." -ForegroundColor Yellow
+        Read-Host "`nPressione Enter para continuar"
+        return
+    }
+
+    # --- Passo 1: upk ---
+    Write-Host "`n[1/3] Desinstalando a chave de produto (slmgr /upk)..." -ForegroundColor Yellow
+    try {
+        $upk = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /upk 2>&1 | Out-String
+        Write-Host $upk.Trim() -ForegroundColor Gray
+        if ($upk -match "desinstalada com .xito|uninstalled successfully|uninstalled product key") {
+            Write-Host "      [OK] Chave desinstalada." -ForegroundColor Green
+        } else {
+            Write-Host "      [AVISO] Verifique a saida acima." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "      [ERRO] Falha ao desinstalar chave: $_" -ForegroundColor Red
+    }
+
+    # --- Passo 2: cpky ---
+    Write-Host "`n[2/3] Limpando a chave do registro (slmgr /cpky)..." -ForegroundColor Yellow
+    try {
+        $cpky = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /cpky 2>&1 | Out-String
+        Write-Host $cpky.Trim() -ForegroundColor Gray
+        if ($cpky -match "limpa|cleared|successfully") {
+            Write-Host "      [OK] Registro limpo." -ForegroundColor Green
+        } else {
+            Write-Host "      [AVISO] Verifique a saida acima." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "      [ERRO] Falha ao limpar registro: $_" -ForegroundColor Red
+    }
+
+    # --- Passo 3: rearm ---
+    Write-Host "`n[3/3] Resetando o estado de ativacao (slmgr /rearm)..." -ForegroundColor Yellow
+    try {
+        $rearm = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /rearm 2>&1 | Out-String
+        Write-Host $rearm.Trim() -ForegroundColor Gray
+        if ($rearm -match "rearm|reiniciar|restart") {
+            Write-Host "      [OK] Estado de ativacao resetado." -ForegroundColor Green
+        } else {
+            Write-Host "      [AVISO] Verifique a saida acima." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "      [ERRO] Falha ao resetar estado: $_" -ForegroundColor Red
+    }
+
+    # --- Verificacao final ---
+    Write-Host "`n--- VERIFICACAO FINAL ---" -ForegroundColor Cyan
+    try {
+        $dli = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /dli 2>&1 | Out-String
+        Write-Host $dli.Trim() -ForegroundColor White
+    } catch {}
+
+    try {
+        $xpr = & cscript //nologo "$env:SystemRoot\System32\slmgr.vbs" /xpr 2>&1 | Out-String
+        Write-Host "`n$xpr".Trim() -ForegroundColor White
+    } catch {}
+
+    Write-Host "`n[SUCESSO] Processo concluido." -ForegroundColor Green
+    Write-Host "[INFO] Recomenda-se REINICIAR o computador para concluir a remocao." -ForegroundColor Yellow
+    Write-Host "[INFO] Apos o reinicio, o Windows estara sem licenca (nao ativado)." -ForegroundColor Yellow
+    Write-Host "[INFO] Para reativar: Menu Sistema -> [3] Ativar Windows/Office (MAS)" -ForegroundColor Cyan
+    Write-Host "       ou Menu Sistema -> [6] Chutar Chave do Windows." -ForegroundColor Cyan
     Read-Host "`nPressione Enter para continuar"
 }
 
@@ -1827,7 +1924,7 @@ try {
     do {
         Draw-Header -Art $ArtMain
         Write-Host "=====================================================" -ForegroundColor Cyan
-        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.7           " -ForegroundColor Green
+        Write-Host "        PAINEL DE FERRAMENTAS DE TI - v4.8           " -ForegroundColor Green
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  [1] REDE        (Ping, IP, Release/Renew, DNS, SMB)" -ForegroundColor White
